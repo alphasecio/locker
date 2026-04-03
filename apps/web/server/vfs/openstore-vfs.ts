@@ -1,29 +1,29 @@
-import path from 'node:path';
-import { and, eq } from 'drizzle-orm';
-import { files, folders } from '@openstore/database';
-import type { Database } from '@openstore/database';
-import type { StorageProvider } from '@openstore/storage';
+import path from "node:path";
+import { and, eq } from "drizzle-orm";
+import { files, folders } from "@openstore/database";
+import type { Database } from "@openstore/database";
+import type { StorageProvider } from "@openstore/storage";
 import type {
   CpOptions,
   FsStat,
   IFileSystem,
   MkdirOptions,
   RmOptions,
-} from 'just-bash';
+} from "just-bash";
 
-type ReadFileOptionsArg = Parameters<IFileSystem['readFile']>[1];
-type WriteFileOptionsArg = Parameters<IFileSystem['writeFile']>[2];
+type ReadFileOptionsArg = Parameters<IFileSystem["readFile"]>[1];
+type WriteFileOptionsArg = Parameters<IFileSystem["writeFile"]>[2];
 type DirentEntryLike = Awaited<
-  ReturnType<NonNullable<IFileSystem['readdirWithFileTypes']>>
+  ReturnType<NonNullable<IFileSystem["readdirWithFileTypes"]>>
 >[number];
 type ReadEncoding =
-  | 'utf8'
-  | 'utf-8'
-  | 'ascii'
-  | 'binary'
-  | 'base64'
-  | 'hex'
-  | 'latin1';
+  | "utf8"
+  | "utf-8"
+  | "ascii"
+  | "binary"
+  | "base64"
+  | "hex"
+  | "latin1";
 
 /**
  * Read-only virtual filesystem for workspace traversal with just-bash.
@@ -105,39 +105,36 @@ const pendingSnapshotBuilds = new Map<string, Promise<VfsSnapshot>>();
 const fileContentCache = new Map<string, ContentCacheEntry>();
 
 function readPositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? '', 10);
+  const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return parsed;
 }
 
 function normalizeVirtualPath(inputPath: string): string {
-  const withRoot = inputPath.startsWith('/') ? inputPath : `/${inputPath}`;
+  const withRoot = inputPath.startsWith("/") ? inputPath : `/${inputPath}`;
   const normalized = path.posix.normalize(withRoot);
-  if (normalized.length > 1 && normalized.endsWith('/')) {
+  if (normalized.length > 1 && normalized.endsWith("/")) {
     return normalized.slice(0, -1);
   }
-  return normalized || '/';
+  return normalized || "/";
 }
 
 function dirnameVirtualPath(inputPath: string): string {
-  if (inputPath === '/') return '/';
+  if (inputPath === "/") return "/";
   const parent = path.posix.dirname(inputPath);
-  return parent === '.' ? '/' : parent;
+  return parent === "." ? "/" : parent;
 }
 
 function joinVirtualPath(parentPath: string, childName: string): string {
-  if (parentPath === '/') return normalizeVirtualPath(`/${childName}`);
+  if (parentPath === "/") return normalizeVirtualPath(`/${childName}`);
   return normalizeVirtualPath(`${parentPath}/${childName}`);
 }
 
-function toDirent(
-  name: string,
-  type: 'file' | 'directory',
-): DirentEntryLike {
+function toDirent(name: string, type: "file" | "directory"): DirentEntryLike {
   return {
     name,
-    isFile: type === 'file',
-    isDirectory: type === 'directory',
+    isFile: type === "file",
+    isDirectory: type === "directory",
     isSymbolicLink: false,
   };
 }
@@ -150,32 +147,35 @@ function createFsError(code: string, message: string): Error {
 
 function enoent(operation: string, inputPath: string): Error {
   return createFsError(
-    'ENOENT',
+    "ENOENT",
     `no such file or directory, ${operation} '${inputPath}'`,
   );
 }
 
 function enotdir(operation: string, inputPath: string): Error {
-  return createFsError('ENOTDIR', `not a directory, ${operation} '${inputPath}'`);
+  return createFsError(
+    "ENOTDIR",
+    `not a directory, ${operation} '${inputPath}'`,
+  );
 }
 
 function eisdir(operation: string, inputPath: string): Error {
   return createFsError(
-    'EISDIR',
+    "EISDIR",
     `illegal operation on a directory, ${operation} '${inputPath}'`,
   );
 }
 
 function readOnlyError(operation: string, inputPath: string): Error {
   return createFsError(
-    'EROFS',
+    "EROFS",
     `read-only file system, ${operation} '${inputPath}'`,
   );
 }
 
 function appendIdSuffix(name: string, id: string): string {
   const shortId = id.slice(0, 8);
-  const dotIndex = name.lastIndexOf('.');
+  const dotIndex = name.lastIndexOf(".");
   if (dotIndex > 0 && dotIndex < name.length - 1) {
     const base = name.slice(0, dotIndex);
     const ext = name.slice(dotIndex);
@@ -244,7 +244,7 @@ async function readStreamToUint8Array(
     if (totalBytes > maxBytes) {
       await reader.cancel();
       throw createFsError(
-        'EFBIG',
+        "EFBIG",
         `file too large, read '${inputPath}' (${totalBytes} bytes, max ${maxBytes})`,
       );
     }
@@ -264,13 +264,13 @@ async function readStreamToUint8Array(
 }
 
 function resolveReadEncoding(options?: ReadFileOptionsArg): ReadEncoding {
-  if (typeof options === 'string') {
+  if (typeof options === "string") {
     return options as ReadEncoding;
   }
-  if (typeof options?.encoding === 'string') {
+  if (typeof options?.encoding === "string") {
     return options.encoding as ReadEncoding;
   }
-  return 'utf8';
+  return "utf8";
 }
 
 function getCachedContent(cacheKey: string): Uint8Array | null {
@@ -296,7 +296,9 @@ function setCachedContent(cacheKey: string, bytes: Uint8Array): void {
   });
 
   while (fileContentCache.size > MAX_CONTENT_CACHE_ENTRIES) {
-    const oldestKey = fileContentCache.keys().next().value as string | undefined;
+    const oldestKey = fileContentCache.keys().next().value as
+      | string
+      | undefined;
     if (!oldestKey) break;
     fileContentCache.delete(oldestKey);
   }
@@ -315,7 +317,7 @@ async function buildWorkspaceSnapshot(params: {
         updatedAt: folders.updatedAt,
       })
       .from(folders)
-      .where(eq(folders.workspaceId as any, params.workspaceId) as any),
+      .where(eq(folders.workspaceId, params.workspaceId)),
     params.db
       .select({
         id: files.id,
@@ -329,9 +331,9 @@ async function buildWorkspaceSnapshot(params: {
       .from(files)
       .where(
         and(
-          eq(files.workspaceId as any, params.workspaceId),
-          eq(files.status as any, 'ready'),
-        ) as any,
+          eq(files.workspaceId, params.workspaceId),
+          eq(files.status, "ready"),
+        ),
       ),
   ]);
 
@@ -341,10 +343,10 @@ async function buildWorkspaceSnapshot(params: {
 
   const folderRowsByParent = new Map<string | null, FolderRow[]>();
   for (const row of folderRows) {
-    const parentKey = row.parentId && foldersById.has(row.parentId)
-      ? row.parentId
-      : null;
-    if (!folderRowsByParent.has(parentKey)) folderRowsByParent.set(parentKey, []);
+    const parentKey =
+      row.parentId && foldersById.has(row.parentId) ? row.parentId : null;
+    if (!folderRowsByParent.has(parentKey))
+      folderRowsByParent.set(parentKey, []);
     folderRowsByParent.get(parentKey)!.push(row);
   }
 
@@ -363,16 +365,16 @@ async function buildWorkspaceSnapshot(params: {
     const cached = folderPathById.get(folderId);
     if (cached) return cached;
 
-    if (resolvingStack.has(folderId)) return '/';
+    if (resolvingStack.has(folderId)) return "/";
     resolvingStack.add(folderId);
 
     const row = foldersById.get(folderId);
-    if (!row) return '/';
+    if (!row) return "/";
 
     const parentPath =
       row.parentId && foldersById.has(row.parentId)
         ? resolveFolderPath(row.parentId)
-        : '/';
+        : "/";
 
     const uniqueName = uniqueFolderNameById.get(folderId) ?? row.name;
     const resolved = joinVirtualPath(parentPath, uniqueName);
@@ -398,7 +400,7 @@ async function buildWorkspaceSnapshot(params: {
     return created;
   };
 
-  ensureDirectory('/');
+  ensureDirectory("/");
 
   for (const row of folderRows) {
     const folderPath = resolveFolderPath(row.id);
@@ -409,7 +411,7 @@ async function buildWorkspaceSnapshot(params: {
     const parentNode = ensureDirectory(parentPath);
     parentNode.childrenByName.set(
       path.posix.basename(folderPath),
-      toDirent(path.posix.basename(folderPath), 'directory'),
+      toDirent(path.posix.basename(folderPath), "directory"),
     );
     parentNode.mtime = maxDate(parentNode.mtime, row.updatedAt);
   }
@@ -419,8 +421,9 @@ async function buildWorkspaceSnapshot(params: {
     const parentPath =
       row.folderId && folderPathById.has(row.folderId)
         ? folderPathById.get(row.folderId)!
-        : '/';
-    if (!filesByParentPath.has(parentPath)) filesByParentPath.set(parentPath, []);
+        : "/";
+    if (!filesByParentPath.has(parentPath))
+      filesByParentPath.set(parentPath, []);
     filesByParentPath.get(parentPath)!.push(row);
   }
 
@@ -443,15 +446,14 @@ async function buildWorkspaceSnapshot(params: {
       };
 
       filesByPath.set(filePath, fileNode);
-      parentNode.childrenByName.set(uniqueName, toDirent(uniqueName, 'file'));
+      parentNode.childrenByName.set(uniqueName, toDirent(uniqueName, "file"));
       parentNode.mtime = maxDate(parentNode.mtime, row.updatedAt);
     }
   }
 
-  const allPaths = [
-    ...directoriesByPath.keys(),
-    ...filesByPath.keys(),
-  ].sort((a, b) => a.localeCompare(b));
+  const allPaths = [...directoriesByPath.keys(), ...filesByPath.keys()].sort(
+    (a, b) => a.localeCompare(b),
+  );
 
   return {
     directoriesByPath,
@@ -541,21 +543,25 @@ export class OpenStoreVirtualFileSystem implements IFileSystem {
 
     if (fileNode.size > MAX_READ_BYTES) {
       throw createFsError(
-        'EFBIG',
+        "EFBIG",
         `file too large, read '${inputPath}' (${fileNode.size} bytes, max ${MAX_READ_BYTES})`,
       );
     }
 
     try {
       const { data } = await this.storage.download(fileNode.storagePath);
-      const bytes = await readStreamToUint8Array(data, MAX_READ_BYTES, inputPath);
+      const bytes = await readStreamToUint8Array(
+        data,
+        MAX_READ_BYTES,
+        inputPath,
+      );
       setCachedContent(cacheKey, bytes);
       return bytes;
     } catch (error) {
-      if (error instanceof Error && error.message.startsWith('EFBIG:')) {
+      if (error instanceof Error && error.message.startsWith("EFBIG:")) {
         throw error;
       }
-      throw enoent('open', inputPath);
+      throw enoent("open", inputPath);
     }
   }
 
@@ -576,10 +582,10 @@ export class OpenStoreVirtualFileSystem implements IFileSystem {
     }
 
     if (this.snapshot.directoriesByPath.has(normalizedPath)) {
-      throw eisdir('read', inputPath);
+      throw eisdir("read", inputPath);
     }
 
-    throw enoent('open', inputPath);
+    throw enoent("open", inputPath);
   }
 
   async writeFile(
@@ -587,7 +593,7 @@ export class OpenStoreVirtualFileSystem implements IFileSystem {
     _content: string | Uint8Array,
     _options?: WriteFileOptionsArg,
   ): Promise<void> {
-    throw readOnlyError('write', inputPath);
+    throw readOnlyError("write", inputPath);
   }
 
   async appendFile(
@@ -595,11 +601,11 @@ export class OpenStoreVirtualFileSystem implements IFileSystem {
     _content: string | Uint8Array,
     _options?: WriteFileOptionsArg,
   ): Promise<void> {
-    throw readOnlyError('append', inputPath);
+    throw readOnlyError("append", inputPath);
   }
 
   async exists(inputPath: string): Promise<boolean> {
-    if (inputPath.includes('\0')) return false;
+    if (inputPath.includes("\0")) return false;
     const normalizedPath = this.normalized(inputPath);
     return (
       this.snapshot.filesByPath.has(normalizedPath) ||
@@ -633,11 +639,11 @@ export class OpenStoreVirtualFileSystem implements IFileSystem {
       };
     }
 
-    throw enoent('stat', inputPath);
+    throw enoent("stat", inputPath);
   }
 
   async mkdir(_path: string, _options?: MkdirOptions): Promise<void> {
-    throw readOnlyError('mkdir', _path);
+    throw readOnlyError("mkdir", _path);
   }
 
   async readdir(inputPath: string): Promise<string[]> {
@@ -650,9 +656,9 @@ export class OpenStoreVirtualFileSystem implements IFileSystem {
     const directoryNode = this.snapshot.directoriesByPath.get(normalizedPath);
     if (!directoryNode) {
       if (this.snapshot.filesByPath.has(normalizedPath)) {
-        throw enotdir('scandir', inputPath);
+        throw enotdir("scandir", inputPath);
       }
-      throw enoent('scandir', inputPath);
+      throw enoent("scandir", inputPath);
     }
 
     return [...directoryNode.childrenByName.values()].sort((left, right) =>
@@ -661,19 +667,19 @@ export class OpenStoreVirtualFileSystem implements IFileSystem {
   }
 
   async rm(inputPath: string, _options?: RmOptions): Promise<void> {
-    throw readOnlyError('rm', inputPath);
+    throw readOnlyError("rm", inputPath);
   }
 
   async cp(_src: string, dest: string, _options?: CpOptions): Promise<void> {
-    throw readOnlyError('cp', dest);
+    throw readOnlyError("cp", dest);
   }
 
   async mv(_src: string, dest: string): Promise<void> {
-    throw readOnlyError('mv', dest);
+    throw readOnlyError("mv", dest);
   }
 
   resolvePath(base: string, targetPath: string): string {
-    const normalizedBase = normalizeVirtualPath(base || '/');
+    const normalizedBase = normalizeVirtualPath(base || "/");
     const resolved = path.posix.resolve(normalizedBase, targetPath);
     return normalizeVirtualPath(resolved);
   }
@@ -683,15 +689,15 @@ export class OpenStoreVirtualFileSystem implements IFileSystem {
   }
 
   async chmod(inputPath: string, _mode: number): Promise<void> {
-    throw readOnlyError('chmod', inputPath);
+    throw readOnlyError("chmod", inputPath);
   }
 
   async symlink(_target: string, linkPath: string): Promise<void> {
-    throw readOnlyError('symlink', linkPath);
+    throw readOnlyError("symlink", linkPath);
   }
 
   async link(_existingPath: string, newPath: string): Promise<void> {
-    throw readOnlyError('link', newPath);
+    throw readOnlyError("link", newPath);
   }
 
   async readlink(inputPath: string): Promise<string> {
@@ -699,8 +705,8 @@ export class OpenStoreVirtualFileSystem implements IFileSystem {
     const exists =
       this.snapshot.directoriesByPath.has(normalizedPath) ||
       this.snapshot.filesByPath.has(normalizedPath);
-    if (!exists) throw enoent('readlink', inputPath);
-    throw createFsError('EINVAL', `invalid argument, readlink '${inputPath}'`);
+    if (!exists) throw enoent("readlink", inputPath);
+    throw createFsError("EINVAL", `invalid argument, readlink '${inputPath}'`);
   }
 
   async lstat(inputPath: string): Promise<FsStat> {
@@ -712,11 +718,11 @@ export class OpenStoreVirtualFileSystem implements IFileSystem {
     const exists =
       this.snapshot.directoriesByPath.has(normalizedPath) ||
       this.snapshot.filesByPath.has(normalizedPath);
-    if (!exists) throw enoent('realpath', inputPath);
+    if (!exists) throw enoent("realpath", inputPath);
     return normalizedPath;
   }
 
   async utimes(inputPath: string, _atime: Date, _mtime: Date): Promise<void> {
-    throw readOnlyError('utimes', inputPath);
+    throw readOnlyError("utimes", inputPath);
   }
 }

@@ -1,8 +1,9 @@
-import { randomUUID } from 'node:crypto';
-import { Bash } from 'just-bash';
-import type { Database } from '@openstore/database';
-import type { StorageProvider } from '@openstore/storage';
-import { OpenStoreVirtualFileSystem } from './openstore-vfs';
+import { randomUUID } from "node:crypto";
+import { Bash } from "just-bash";
+import type { Database } from "@openstore/database";
+import type { StorageProvider } from "@openstore/storage";
+import { OpenStoreVirtualFileSystem } from "./openstore-vfs";
+import { optimizedGrepCommand } from "./grep-command";
 
 type OpenStoreVfsType = OpenStoreVirtualFileSystem;
 
@@ -33,8 +34,11 @@ interface VfsShellSession {
 
 const sessionsById = new Map<string, VfsShellSession>();
 
+const PRUNE_THROTTLE_MS = 30_000;
+let lastPruneAt = 0;
+
 function readPositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? '', 10);
+  const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return parsed;
 }
@@ -45,6 +49,9 @@ function getSessionExpiryTime(session: VfsShellSession): number {
 
 function pruneExpiredSessions(): void {
   const now = Date.now();
+  if (now - lastPruneAt < PRUNE_THROTTLE_MS) return;
+  lastPruneAt = now;
+
   for (const [sessionId, session] of sessionsById.entries()) {
     if (getSessionExpiryTime(session) <= now) {
       sessionsById.delete(sessionId);
@@ -57,7 +64,10 @@ async function resolveSafeDirectory(params: {
   requestedCwd: string;
   fallbackCwd: string;
 }): Promise<string> {
-  const resolved = params.fs.resolvePath(params.fallbackCwd, params.requestedCwd);
+  const resolved = params.fs.resolvePath(
+    params.fallbackCwd,
+    params.requestedCwd,
+  );
   const exists = await params.fs.exists(resolved);
   if (!exists) return params.fallbackCwd;
 
@@ -125,16 +135,17 @@ export async function createVfsShellSession(params: {
     storage: params.storage,
   });
 
-  const requestedCwd = params.cwd?.trim() || '/';
+  const requestedCwd = params.cwd?.trim() || "/";
   const cwd = await resolveSafeDirectory({
     fs,
     requestedCwd,
-    fallbackCwd: '/',
+    fallbackCwd: "/",
   });
 
   const bash = new Bash({
     fs,
     cwd,
+    customCommands: [optimizedGrepCommand],
   });
 
   const now = Date.now();
@@ -207,11 +218,12 @@ export async function executeVfsShellCommand(params: {
       expiresAt: new Date(getSessionExpiryTime(session)),
     };
   } catch (error) {
-    const timedOut = controller.signal.aborted && Date.now() - startedAt >= timeoutMs;
+    const timedOut =
+      controller.signal.aborted && Date.now() - startedAt >= timeoutMs;
     session.lastUsedAt = Date.now();
 
     return {
-      stdout: '',
+      stdout: "",
       stderr: timedOut
         ? `Command timed out after ${timeoutMs}ms\n`
         : `${error instanceof Error ? error.message : String(error)}\n`,
@@ -246,14 +258,14 @@ export function getVfsShellSessionSummary(params: {
 
 export class VfsShellSessionNotFoundError extends Error {
   constructor() {
-    super('Shell session not found');
-    this.name = 'VfsShellSessionNotFoundError';
+    super("Shell session not found");
+    this.name = "VfsShellSessionNotFoundError";
   }
 }
 
 export class VfsShellSessionAccessDeniedError extends Error {
   constructor() {
-    super('Shell session access denied');
-    this.name = 'VfsShellSessionAccessDeniedError';
+    super("Shell session access denied");
+    this.name = "VfsShellSessionAccessDeniedError";
   }
 }
