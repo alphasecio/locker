@@ -26,6 +26,7 @@ interface StoreEntry {
 }
 
 const stores = new Map<string, StoreEntry>();
+const pendingOpens = new Map<string, Promise<QMDStore>>();
 
 function isIndexable(mimeType: string): boolean {
   return (
@@ -55,19 +56,32 @@ async function getStore(workspaceId: string): Promise<QMDStore> {
     return existing.store;
   }
 
-  const dbPath = getDbPath(workspaceId);
-  const store = await createStore({ database: dbPath });
+  // Prevent concurrent createStore calls for the same workspace
+  const pending = pendingOpens.get(workspaceId);
+  if (pending) return pending;
 
-  const entry: StoreEntry = {
-    store,
-    timer: setTimeout(() => {}, 0),
-    mutex: Promise.resolve(),
-  };
-  resetTimer(workspaceId, entry);
-  stores.set(workspaceId, entry);
+  const opening = (async () => {
+    const dbPath = getDbPath(workspaceId);
+    const store = await createStore({ database: dbPath });
 
-  console.log(`[qmd] Opened store for workspace ${workspaceId}`);
-  return store;
+    const entry: StoreEntry = {
+      store,
+      timer: setTimeout(() => {}, 0),
+      mutex: Promise.resolve(),
+    };
+    resetTimer(workspaceId, entry);
+    stores.set(workspaceId, entry);
+
+    console.log(`[qmd] Opened store for workspace ${workspaceId}`);
+    return store;
+  })();
+
+  pendingOpens.set(workspaceId, opening);
+  try {
+    return await opening;
+  } finally {
+    pendingOpens.delete(workspaceId);
+  }
 }
 
 function withMutex(workspaceId: string, fn: () => Promise<void>): Promise<void> {

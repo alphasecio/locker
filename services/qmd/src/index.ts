@@ -1,7 +1,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 import { indexFile, deindexFile, search, getStoreCount, closeAll } from './store-manager.js';
 
 const PORT = parseInt(process.env.QMD_PORT || '9600', 10);
+const API_SECRET = process.env.QMD_API_SECRET;
 
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
@@ -16,12 +18,25 @@ function json(res: ServerResponse, status: number, data: unknown): void {
   res.end(JSON.stringify(data));
 }
 
+function isAuthenticated(req: IncomingMessage): boolean {
+  if (!API_SECRET) return true; // No secret configured = open (dev mode)
+  const header = req.headers['authorization'] ?? '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+  if (token.length !== API_SECRET.length) return false;
+  return timingSafeEqual(Buffer.from(token), Buffer.from(API_SECRET));
+}
+
 async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = req.url ?? '/';
   const method = req.method ?? 'GET';
 
   if (method === 'GET' && url === '/health') {
     json(res, 200, { status: 'ok', workspaces: getStoreCount() });
+    return;
+  }
+
+  if (!isAuthenticated(req)) {
+    json(res, 401, { error: 'Unauthorized' });
     return;
   }
 
@@ -120,6 +135,9 @@ const server = createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`[qmd] Service listening on port ${PORT}`);
   console.log(`[qmd] Data directory: ${process.env.QMD_DATA_DIR || './data/qmd'}`);
+  if (!API_SECRET) {
+    console.warn('[qmd] WARNING: QMD_API_SECRET is not set — endpoints are unauthenticated');
+  }
 });
 
 process.on('SIGTERM', () => {

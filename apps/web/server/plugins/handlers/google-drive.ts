@@ -34,7 +34,7 @@ export const googleDriveHandler: PluginHandler = {
         .limit(1);
 
       if (!file) {
-        return { status: 'success', message: 'File not found' };
+        throw new Error('File not found');
       }
 
       const downloadUrl = await ctx.storage.getSignedUrl(file.storagePath, 900);
