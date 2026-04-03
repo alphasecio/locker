@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Home,
   BarChart3,
+  Sparkles,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc/client';
 import { formatBytes, formatDate } from '@/lib/utils';
@@ -103,6 +104,14 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
   });
 
   const getDownloadUrl = trpc.files.getDownloadUrl.useMutation();
+  const runPluginAction = trpc.plugins.runAction.useMutation();
+
+  const { data: filePluginActions = [] } = trpc.plugins.fileActions.useQuery({
+    target: 'file',
+  });
+  const { data: folderPluginActions = [] } = trpc.plugins.fileActions.useQuery({
+    target: 'folder',
+  });
 
   const handleDownload = useCallback(
     async (fileId: string) => {
@@ -119,6 +128,35 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
     setDroppedFiles(files);
     setShowUpload(true);
   }, []);
+
+  const handlePluginAction = useCallback(
+    async (
+      action: {
+        workspacePluginId: string;
+        actionId: string;
+        label: string;
+      },
+      target: 'file' | 'folder',
+      targetId: string,
+    ) => {
+      try {
+        const result = await runPluginAction.mutateAsync({
+          workspacePluginId: action.workspacePluginId,
+          actionId: action.actionId,
+          target,
+          targetId,
+        });
+
+        toast.success(result.message);
+        if (result.downloadUrl) {
+          window.open(result.downloadUrl, '_blank', 'noopener,noreferrer');
+        }
+      } catch (err) {
+        toast.error((err as Error).message);
+      }
+    },
+    [runPluginAction],
+  );
 
   const onDrop = useCallback(
     (item: { id: string; type: 'file' | 'folder' }, targetFolderId: string) => {
@@ -300,6 +338,22 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
                         <BarChart3 />
                         Track
                       </DropdownMenuItem>
+                      {folderPluginActions.length > 0 && (
+                        <>
+                          <DropdownMenuSeparator />
+                          {folderPluginActions.map((action) => (
+                            <DropdownMenuItem
+                              key={`${action.workspacePluginId}:${action.actionId}`}
+                              onSelect={() =>
+                                handlePluginAction(action, 'folder', folder.id)
+                              }
+                            >
+                              <Sparkles />
+                              {action.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </>
+                      )}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         variant="destructive"
@@ -391,6 +445,22 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
                       <BarChart3 />
                       Track
                     </DropdownMenuItem>
+                    {filePluginActions.length > 0 && (
+                      <>
+                        <DropdownMenuSeparator />
+                        {filePluginActions.map((action) => (
+                          <DropdownMenuItem
+                            key={`${action.workspacePluginId}:${action.actionId}`}
+                            onSelect={() =>
+                              handlePluginAction(action, 'file', file.id)
+                            }
+                          >
+                            <Sparkles />
+                            {action.label}
+                          </DropdownMenuItem>
+                        ))}
+                      </>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       variant="destructive"

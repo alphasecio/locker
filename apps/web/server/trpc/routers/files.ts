@@ -4,6 +4,7 @@ import { createRouter, workspaceProcedure } from '../init';
 import { files, workspaces, folders } from '@openstore/database';
 import { createStorage } from '@openstore/storage';
 import { renameFileSchema, moveItemSchema, paginationSchema, sortSchema } from '@openstore/common';
+import { enhanceSearchResultsWithPlugins } from '../../plugins/search';
 
 export const filesRouter = createRouter({
   list: workspaceProcedure
@@ -46,10 +47,20 @@ export const filesRouter = createRouter({
           .where(and(...conditions)),
       ]);
 
+      const enhancedItems =
+        search && search.trim().length > 0
+          ? await enhanceSearchResultsWithPlugins({
+              db,
+              workspaceId: ctx.workspaceId,
+              query: search,
+              results: items,
+            })
+          : items;
+
       const total = Number(countResult[0]?.count ?? 0);
 
       return {
-        items,
+        items: enhancedItems,
         total,
         page,
         pageSize,

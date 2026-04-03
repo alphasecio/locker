@@ -9,6 +9,7 @@ import { membersRouter } from './routers/members';
 import { uploadsRouter } from './routers/uploads';
 import { s3KeysRouter } from './routers/s3-keys';
 import { trackedLinksRouter } from './routers/tracked-links';
+import { pluginsRouter } from './routers/plugins';
 
 export const appRouter = createRouter({
   files: filesRouter,
@@ -21,6 +22,7 @@ export const appRouter = createRouter({
   uploads: uploadsRouter,
   s3Keys: s3KeysRouter,
   trackedLinks: trackedLinksRouter,
+  plugins: pluginsRouter,
 });
 
 export type AppRouter = typeof appRouter;
