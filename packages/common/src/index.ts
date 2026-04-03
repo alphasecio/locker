@@ -11,8 +11,43 @@ export type {
   WorkspaceRole,
   InviteStatus,
 } from './types';
+export type {
+  PluginSource,
+  PluginStatus,
+  PluginPermission,
+  PluginCapability,
+  PluginActionTarget,
+  PluginConfigFieldType,
+  PluginManifest,
+  PluginAction,
+  PluginConfigField,
+} from './plugins';
 
 export { WORKSPACE_ROLES } from './types';
+export {
+  PLUGIN_SOURCES,
+  PLUGIN_STATUSES,
+  PLUGIN_PERMISSIONS,
+  PLUGIN_PERMISSION_LABELS,
+  PLUGIN_CAPABILITIES,
+  PLUGIN_ACTION_TARGETS,
+  PLUGIN_CONFIG_FIELD_TYPES,
+  pluginSourceSchema,
+  pluginStatusSchema,
+  pluginPermissionSchema,
+  pluginCapabilitySchema,
+  pluginActionTargetSchema,
+  pluginConfigFieldTypeSchema,
+  pluginConfigFieldSchema,
+  pluginActionSchema,
+  pluginManifestSchema,
+  registerWorkspacePluginSchema,
+  installWorkspacePluginSchema,
+  updateWorkspacePluginConfigSchema,
+  setWorkspacePluginStatusSchema,
+  listPluginActionsSchema,
+  runPluginActionSchema,
+} from './plugins';
 
 export {
   MAX_FILE_SIZE,

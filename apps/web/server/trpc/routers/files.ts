@@ -4,6 +4,9 @@ import { createRouter, workspaceProcedure } from '../init';
 import { files, workspaces, folders } from '@openstore/database';
 import { createStorage } from '@openstore/storage';
 import { renameFileSchema, moveItemSchema, paginationSchema, sortSchema } from '@openstore/common';
+import { enhanceSearchResultsWithPlugins } from '../../plugins/search';
+import { qmdClient } from '../../plugins/handlers/qmd-client';
+import { invalidateWorkspaceVfsSnapshot } from '../../vfs/openstore-vfs';
 
 export const filesRouter = createRouter({
   list: workspaceProcedure
@@ -46,10 +49,20 @@ export const filesRouter = createRouter({
           .where(and(...conditions)),
       ]);
 
+      const enhancedItems =
+        search && search.trim().length > 0
+          ? await enhanceSearchResultsWithPlugins({
+              db,
+              workspaceId: ctx.workspaceId,
+              query: search,
+              results: items,
+            })
+          : items;
+
       const total = Number(countResult[0]?.count ?? 0);
 
       return {
-        items,
+        items: enhancedItems,
         total,
         page,
         pageSize,
@@ -93,6 +106,7 @@ export const filesRouter = createRouter({
         .where(and(eq(files.id, input.id), eq(files.workspaceId, ctx.workspaceId)))
         .returning();
 
+      invalidateWorkspaceVfsSnapshot(ctx.workspaceId);
       return updated;
     }),
 
@@ -119,6 +133,7 @@ export const filesRouter = createRouter({
         .where(and(eq(files.id, input.id), eq(files.workspaceId, ctx.workspaceId)))
         .returning();
 
+      invalidateWorkspaceVfsSnapshot(ctx.workspaceId);
       return updated;
     }),
 
@@ -136,6 +151,19 @@ export const filesRouter = createRouter({
       const storage = createStorage();
       await storage.delete(file.storagePath);
 
+      // De-index from QMD search (only if plugin is active for this workspace)
+      if (qmdClient.isConfigured()) {
+        void (async () => {
+          try {
+            if (!(await qmdClient.isActiveForWorkspace(ctx.db, ctx.workspaceId))) return;
+            await qmdClient.deindexFile({
+              workspaceId: ctx.workspaceId,
+              fileId: file.id,
+            });
+          } catch {}
+        })();
+      }
+
       // Delete from database
       await ctx.db.delete(files).where(eq(files.id, input.id));
 
@@ -145,6 +173,7 @@ export const filesRouter = createRouter({
         .set({ storageUsed: sql`GREATEST(${workspaces.storageUsed} - ${file.size}, 0)` })
         .where(eq(workspaces.id, ctx.workspaceId));
 
+      invalidateWorkspaceVfsSnapshot(ctx.workspaceId);
       return { success: true };
     }),
 
@@ -154,6 +183,10 @@ export const filesRouter = createRouter({
       const storage = createStorage();
       let totalSize = 0;
 
+      const qmdActive =
+        qmdClient.isConfigured() &&
+        (await qmdClient.isActiveForWorkspace(ctx.db, ctx.workspaceId));
+
       for (const id of input.ids) {
         const [file] = await ctx.db
           .select()
@@ -162,6 +195,12 @@ export const filesRouter = createRouter({
 
         if (file) {
           await storage.delete(file.storagePath);
+          if (qmdActive) {
+            void qmdClient.deindexFile({
+              workspaceId: ctx.workspaceId,
+              fileId: file.id,
+            }).catch(() => {});
+          }
           await ctx.db.delete(files).where(eq(files.id, id));
           totalSize += file.size;
         }
@@ -174,6 +213,7 @@ export const filesRouter = createRouter({
           .where(eq(workspaces.id, ctx.workspaceId));
       }
 
+      invalidateWorkspaceVfsSnapshot(ctx.workspaceId);
       return { success: true, deleted: input.ids.length };
     }),
 });

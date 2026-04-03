@@ -4,6 +4,8 @@ import { randomUUID } from 'crypto';
 import { createRouter, workspaceProcedure } from '../init';
 import { files, folders, workspaces } from '@openstore/database';
 import { createStorage } from '@openstore/storage';
+import { qmdClient, streamToString } from '../../plugins/handlers/qmd-client';
+import { invalidateWorkspaceVfsSnapshot } from '../../vfs/openstore-vfs';
 import {
   initiateUploadSchema,
   completeUploadSchema,
@@ -170,6 +172,26 @@ export const uploadsRouter = createRouter({
         })
         .where(eq(workspaces.id, workspaceId));
 
+      // Fire-and-forget: index file for QMD search (only if plugin is active for this workspace)
+      if (qmdClient.isConfigured() && qmdClient.shouldIndex(file.mimeType)) {
+        void (async () => {
+          try {
+            if (!(await qmdClient.isActiveForWorkspace(db, workspaceId))) return;
+            const storage = createStorage();
+            const { data } = await storage.download(file.storagePath);
+            const content = await streamToString(data);
+            await qmdClient.indexFile({
+              workspaceId,
+              fileId: input.fileId,
+              fileName: file.name,
+              mimeType: file.mimeType,
+              content,
+            });
+          } catch {}
+        })();
+      }
+
+      invalidateWorkspaceVfsSnapshot(workspaceId);
       return updated;
     }),
 
@@ -214,6 +236,7 @@ export const uploadsRouter = createRouter({
       // Delete the file record
       await db.delete(files).where(eq(files.id, input.fileId));
 
+      invalidateWorkspaceVfsSnapshot(workspaceId);
       return { success: true };
     }),
 });
