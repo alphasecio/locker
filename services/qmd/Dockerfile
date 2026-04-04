@@ -17,6 +17,10 @@ RUN pnpm rebuild better-sqlite3 \
 
 COPY . .
 
+# Pre-download the embedding model so it's baked into the image
+RUN node --import tsx -e "import { createStore } from '@tobilu/qmd'; const s = await createStore({ dbPath: '/tmp/_warmup.sqlite' }); await s.search({ query: 'warmup' }).catch(() => {}); s.close();" \
+  || echo "Model warmup failed (non-fatal)"
+
 ENV QMD_DATA_DIR=/data/qmd
 ENV QMD_PORT=9600
 

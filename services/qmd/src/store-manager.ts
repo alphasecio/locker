@@ -157,15 +157,22 @@ export async function deindexFile(params: {
   console.log(`[qmd] De-indexed file ${params.fileId}`);
 }
 
+// Serialize searches per workspace to avoid concurrent embedding work
 export async function search(params: {
   workspaceId: string;
   query: string;
   limit?: number;
 }): Promise<Array<{ fileId: string; score: number; snippet?: string }>> {
   const store = await getStore(params.workspaceId);
-  const results = await store.search({ query: params.query });
 
-  return results.slice(0, params.limit ?? 20).map((r) => ({
+  const limit = params.limit ?? 20;
+
+  let results: Awaited<ReturnType<typeof store.search>>;
+  await withMutex(params.workspaceId, async () => {
+    results = await store.search({ query: params.query, limit });
+  });
+
+  return results!.slice(0, limit).map((r) => ({
     fileId: r.path,
     score: r.score ?? 1,
     snippet: r.content?.slice(0, 200),

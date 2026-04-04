@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   FolderPlus,
@@ -46,7 +46,15 @@ const ROW_GRID =
 export function FileExplorer({ folderId }: { folderId: string | null }) {
   const router = useRouter();
   const workspace = useWorkspace();
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setSearch(searchInput), 350);
+    return () => clearTimeout(debounceRef.current);
+  }, [searchInput]);
   const [showUpload, setShowUpload] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[] | undefined>(
@@ -167,7 +175,7 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
 
   const folders = folderList ?? [];
   const files = fileList?.items ?? [];
-  const isEmpty = folders.length === 0 && files.length === 0 && !search;
+  const isEmpty = folders.length === 0 && files.length === 0 && !searchInput;
 
   return (
     <div>
@@ -222,8 +230,8 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <Input
               placeholder="Search files..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="pl-9 h-8"
             />
           </div>
