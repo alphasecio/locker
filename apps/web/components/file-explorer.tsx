@@ -41,6 +41,7 @@ import { CommandSearch } from "@/components/command-search";
 import { DesktopDropOverlay } from "@/components/desktop-drop-overlay";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { useWorkspace } from "@/lib/workspace-context";
+import { isTextIndexable } from "@locker/common";
 import { toast } from "sonner";
 
 const ROW_GRID =
@@ -521,7 +522,7 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
                           </>
                         );
                       }
-                      if (!tStatus && !file.mimeType.startsWith("text/")) {
+                      if (!tStatus && !isTextIndexable(file.mimeType)) {
                         return (
                           <>
                             <DropdownMenuSeparator />

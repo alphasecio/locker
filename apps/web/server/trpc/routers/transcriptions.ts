@@ -1,8 +1,15 @@
 import { z } from "zod";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
 import { createRouter, workspaceProcedure } from "../init";
 import { files, fileTranscriptions } from "@locker/database";
-import { isTextIndexable, transcribeFile } from "../../plugins/transcription";
+import {
+  isTextIndexable,
+  findTranscriptionPlugin,
+  transcribeFile,
+} from "../../plugins/transcription";
+import { qmdClient } from "../../plugins/handlers/qmd-client";
+import { ftsClient } from "../../plugins/handlers/fts-client";
+import { resolvePluginEndpoint } from "../../plugins/resolve-endpoint";
 
 export const transcriptionsRouter = createRouter({
   /** Get the transcription for a file (if any). */
@@ -27,6 +34,7 @@ export const transcriptionsRouter = createRouter({
             eq(fileTranscriptions.workspaceId, ctx.workspaceId),
           ),
         )
+        .orderBy(desc(fileTranscriptions.updatedAt))
         .limit(1);
 
       return row ?? null;
@@ -42,6 +50,7 @@ export const transcriptionsRouter = createRouter({
         .select({
           fileId: fileTranscriptions.fileId,
           status: fileTranscriptions.status,
+          updatedAt: fileTranscriptions.updatedAt,
         })
         .from(fileTranscriptions)
         .where(
@@ -49,11 +58,15 @@ export const transcriptionsRouter = createRouter({
             inArray(fileTranscriptions.fileId, input.fileIds),
             eq(fileTranscriptions.workspaceId, ctx.workspaceId),
           ),
-        );
+        )
+        .orderBy(desc(fileTranscriptions.updatedAt));
 
+      // Keep only the most recently updated transcription per file
       const result: Record<string, string> = {};
       for (const row of rows) {
-        result[row.fileId] = row.status;
+        if (!(row.fileId in result)) {
+          result[row.fileId] = row.status;
+        }
       }
       return result;
     }),
@@ -92,6 +105,19 @@ export const transcriptionsRouter = createRouter({
         };
       }
 
+      const plugin = await findTranscriptionPlugin(
+        ctx.db,
+        ctx.workspaceId,
+        file.mimeType,
+      );
+      if (!plugin) {
+        return {
+          status: "error" as const,
+          message:
+            "No active transcription plugin supports this file type. Install and configure a document transcription plugin first.",
+        };
+      }
+
       // Fire-and-forget
       void transcribeFile({
         db: ctx.db,
@@ -111,6 +137,19 @@ export const transcriptionsRouter = createRouter({
   delete: workspaceProcedure
     .input(z.object({ fileId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
+      // Check if the source file is text-indexable. If not, the only
+      // indexed content was from the transcription, so we must deindex.
+      const [file] = await ctx.db
+        .select({ mimeType: files.mimeType })
+        .from(files)
+        .where(
+          and(
+            eq(files.id, input.fileId),
+            eq(files.workspaceId, ctx.workspaceId),
+          ),
+        )
+        .limit(1);
+
       await ctx.db
         .delete(fileTranscriptions)
         .where(
@@ -119,6 +158,45 @@ export const transcriptionsRouter = createRouter({
             eq(fileTranscriptions.workspaceId, ctx.workspaceId),
           ),
         );
+
+      // Deindex from search if the source file had no native text content
+      if (file && !isTextIndexable(file.mimeType)) {
+        const qmdEndpoint = await resolvePluginEndpoint(
+          ctx.db,
+          ctx.workspaceId,
+          "qmd-search",
+          {
+            serviceUrl: process.env.QMD_SERVICE_URL,
+            apiSecret: process.env.QMD_API_SECRET,
+          },
+        );
+        if (qmdEndpoint) {
+          void qmdClient
+            .deindexFile(
+              { workspaceId: ctx.workspaceId, fileId: input.fileId },
+              qmdEndpoint,
+            )
+            .catch(() => {});
+        }
+
+        const ftsEndpoint = await resolvePluginEndpoint(
+          ctx.db,
+          ctx.workspaceId,
+          "fts-search",
+          {
+            serviceUrl: process.env.FTS_SERVICE_URL,
+            apiSecret: process.env.FTS_API_SECRET,
+          },
+        );
+        if (ftsEndpoint) {
+          void ftsClient
+            .deindexFile(
+              { workspaceId: ctx.workspaceId, fileId: input.fileId },
+              ftsEndpoint,
+            )
+            .catch(() => {});
+        }
+      }
 
       return { success: true };
     }),

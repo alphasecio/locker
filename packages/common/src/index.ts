@@ -10,7 +10,7 @@ export type {
   BreadcrumbItem,
   WorkspaceRole,
   InviteStatus,
-} from './types';
+} from "./types";
 export type {
   PluginSource,
   PluginStatus,
@@ -21,9 +21,9 @@ export type {
   PluginManifest,
   PluginAction,
   PluginConfigField,
-} from './plugins';
+} from "./plugins";
 
-export { WORKSPACE_ROLES } from './types';
+export { WORKSPACE_ROLES } from "./types";
 export {
   PLUGIN_SOURCES,
   PLUGIN_STATUSES,
@@ -40,6 +40,7 @@ export {
   pluginConfigFieldTypeSchema,
   pluginConfigFieldSchema,
   pluginActionSchema,
+  pluginTranscriptionSchema,
   pluginManifestSchema,
   registerWorkspacePluginSchema,
   installWorkspacePluginSchema,
@@ -47,7 +48,8 @@ export {
   setWorkspacePluginStatusSchema,
   listPluginActionsSchema,
   runPluginActionSchema,
-} from './plugins';
+  isTextIndexable,
+} from "./plugins";
 
 export {
   MAX_FILE_SIZE,
@@ -72,7 +74,7 @@ export {
   getFileCategory,
   FILE_ICON_MAP,
   type FileCategory,
-} from './constants';
+} from "./constants";
 
 export {
   paginationSchema,
@@ -95,4 +97,4 @@ export {
   completeUploadSchema,
   abortUploadSchema,
   generateSlug,
-} from './validation';
+} from "./validation";

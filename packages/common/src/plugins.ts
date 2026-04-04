@@ -267,3 +267,24 @@ export const runPluginActionSchema = z.object({
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;
 export type PluginAction = z.infer<typeof pluginActionSchema>;
 export type PluginConfigField = z.infer<typeof pluginConfigFieldSchema>;
+
+// ---------------------------------------------------------------------------
+// Text-indexable MIME type helpers (shared between server & UI)
+// ---------------------------------------------------------------------------
+
+const TEXT_INDEXABLE_PREFIXES = ["text/"];
+const TEXT_INDEXABLE_TYPES = new Set([
+  "application/json",
+  "application/xml",
+  "application/javascript",
+  "application/typescript",
+]);
+
+/**
+ * Returns true when a MIME type is natively indexable by text search
+ * plugins (FTS / QMD). Files with these types do not need transcription.
+ */
+export function isTextIndexable(mimeType: string): boolean {
+  if (TEXT_INDEXABLE_PREFIXES.some((p) => mimeType.startsWith(p))) return true;
+  return TEXT_INDEXABLE_TYPES.has(mimeType);
+}

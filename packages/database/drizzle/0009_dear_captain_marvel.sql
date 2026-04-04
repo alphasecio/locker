@@ -15,5 +15,4 @@ ALTER TABLE "file_transcriptions" ADD CONSTRAINT "file_transcriptions_workspace_
 CREATE UNIQUE INDEX "file_transcriptions_file_plugin_idx" ON "file_transcriptions" USING btree ("file_id","plugin_slug");--> statement-breakpoint
 CREATE INDEX "file_transcriptions_workspace_idx" ON "file_transcriptions" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX "file_transcriptions_file_idx" ON "file_transcriptions" USING btree ("file_id");--> statement-breakpoint
-CREATE INDEX "file_transcriptions_status_idx" ON "file_transcriptions" USING btree ("status");--> statement-breakpoint
-CREATE UNIQUE INDEX "workspace_storage_configs_active_workspace_idx" ON "workspace_storage_configs" USING btree ("workspace_id") WHERE "is_active" = true;
+CREATE INDEX "file_transcriptions_status_idx" ON "file_transcriptions" USING btree ("status");

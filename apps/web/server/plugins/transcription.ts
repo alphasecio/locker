@@ -1,31 +1,18 @@
 import { and, eq } from "drizzle-orm";
 import { workspacePlugins, fileTranscriptions, files } from "@locker/database";
 import type { Database } from "@locker/database";
-import type { PluginManifest, PluginPermission } from "@locker/common";
+import {
+  isTextIndexable,
+  type PluginManifest,
+  type PluginPermission,
+} from "@locker/common";
 import { getHandler, buildPluginContext } from "./runtime";
 import { resolvePluginEndpoint } from "./resolve-endpoint";
 import { qmdClient } from "./handlers/qmd-client";
 import { ftsClient } from "./handlers/fts-client";
 import type { PluginHandler } from "./types";
 
-// ---------------------------------------------------------------------------
-// MIME type helpers
-// ---------------------------------------------------------------------------
-
-/** MIME type prefixes/types that FTS/QMD can index natively as text. */
-const TEXT_INDEXABLE_PREFIXES = ["text/"];
-const TEXT_INDEXABLE_TYPES = new Set([
-  "application/json",
-  "application/xml",
-  "application/javascript",
-  "application/typescript",
-]);
-
-/** Returns true if FTS/QMD already handle this MIME type natively. */
-export function isTextIndexable(mimeType: string): boolean {
-  if (TEXT_INDEXABLE_PREFIXES.some((p) => mimeType.startsWith(p))) return true;
-  return TEXT_INDEXABLE_TYPES.has(mimeType);
-}
+export { isTextIndexable };
 
 /**
  * Match a MIME pattern (e.g. `image/*`) against a concrete MIME type.
