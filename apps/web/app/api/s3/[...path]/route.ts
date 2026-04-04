@@ -31,6 +31,7 @@ import {
 import {
   createStorageForWorkspace,
   createStorageForFile,
+  shouldEnforceQuota,
 } from "../../../../server/storage";
 import { eq, and, like, sql, isNull } from "drizzle-orm";
 
@@ -320,7 +321,11 @@ async function handlePutObject(
 
     const projectedUsed =
       (ws.storageUsed ?? 0) - (existing?.size ?? 0) + contentLength;
-    if (projectedUsed > (ws.storageLimit ?? 0)) return quotaExceeded();
+    if (
+      (await shouldEnforceQuota(auth.workspaceId)) &&
+      projectedUsed > (ws.storageLimit ?? 0)
+    )
+      return quotaExceeded();
 
     const folderId = await resolveOrCreateFolderChain(
       db,
@@ -594,7 +599,10 @@ async function handleCompleteMultipart(
   const totalSize = parts.reduce((sum, part) => sum + part.size, 0);
   const projectedUsed =
     (ws.storageUsed ?? 0) - (existing?.size ?? 0) + totalSize;
-  if (projectedUsed > (ws.storageLimit ?? 0)) {
+  if (
+    (await shouldEnforceQuota(auth.workspaceId)) &&
+    projectedUsed > (ws.storageLimit ?? 0)
+  ) {
     return quotaExceeded();
   }
 

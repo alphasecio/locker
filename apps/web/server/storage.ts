@@ -132,3 +132,47 @@ export async function createStorageForFile(
 
   return createStorageFromConfig(buildConfig(row));
 }
+
+/**
+ * Whether storage quota should be enforced for new uploads to a workspace.
+ *
+ * Quotas are skipped when:
+ * - The workspace has an active BYOB config (user provides their own bucket)
+ * - The platform default storage is 'local' (self-hosted / development)
+ */
+export async function shouldEnforceQuota(
+  workspaceId: string,
+): Promise<boolean> {
+  return shouldEnforceQuotaForConfig(workspaceId, undefined);
+}
+
+/**
+ * Whether storage quota should be enforced for a specific storage config.
+ *
+ * Use this for resumed uploads where the target backend was decided at
+ * initiate time and may differ from the workspace's current config.
+ *
+ * @param storageConfigId - The file's storageConfigId. Null means platform
+ *   default; undefined means "use current workspace config" (same as
+ *   shouldEnforceQuota).
+ */
+export async function shouldEnforceQuotaForConfig(
+  workspaceId: string,
+  storageConfigId: string | null | undefined,
+): Promise<boolean> {
+  const platformProvider = process.env.BLOB_STORAGE_PROVIDER ?? "local";
+  if (platformProvider === "local") return false;
+
+  if (storageConfigId === undefined) {
+    // Caller wants current-workspace semantics (new uploads)
+    const row = await loadActiveConfig(workspaceId);
+    if (row) return false; // BYOB
+    return true;
+  }
+
+  // null configId = platform default storage → enforce quota
+  if (storageConfigId === null) return true;
+
+  // Non-null configId = bytes go to a BYOB bucket → no quota
+  return false;
+}

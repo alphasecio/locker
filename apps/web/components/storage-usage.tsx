@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { trpc } from '@/lib/trpc/client';
-import { Progress } from '@/components/ui/progress';
-import { Skeleton } from '@/components/ui/skeleton';
-import { formatBytes } from '@/lib/utils';
+import { trpc } from "@/lib/trpc/client";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { formatBytes } from "@/lib/utils";
 
 export function StorageUsage() {
   const { data } = trpc.storage.usage.useQuery();
@@ -20,9 +20,11 @@ export function StorageUsage() {
 
   return (
     <div className="space-y-2">
-      <Progress value={data.percentage} />
+      {data.percentage != null && <Progress value={data.percentage} />}
       <p className="text-xs text-muted-foreground">
-        {formatBytes(data.used)} of {formatBytes(data.limit)} used
+        {data.limit != null
+          ? `${formatBytes(data.used)} of ${formatBytes(data.limit)} used`
+          : `${formatBytes(data.used)} used`}
       </p>
     </div>
   );

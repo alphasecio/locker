@@ -1,7 +1,8 @@
-import { sql } from 'drizzle-orm';
-import { eq } from 'drizzle-orm';
-import { createRouter, workspaceProcedure } from '../init';
-import { workspaces, files, folders } from '@openstore/database';
+import { sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { createRouter, workspaceProcedure } from "../init";
+import { workspaces, files, folders } from "@openstore/database";
+import { shouldEnforceQuota } from "../../storage";
 
 export const storageRouter = createRouter({
   usage: workspaceProcedure.query(async ({ ctx }) => {
@@ -23,14 +24,20 @@ export const storageRouter = createRouter({
       .from(folders)
       .where(eq(folders.workspaceId, ctx.workspaceId));
 
+    const enforceQuota = await shouldEnforceQuota(ctx.workspaceId);
+
     return {
       used: workspace?.storageUsed ?? 0,
-      limit: workspace?.storageLimit ?? 0,
+      limit: enforceQuota ? (workspace?.storageLimit ?? 0) : null,
       fileCount: Number(fileCount?.count ?? 0),
       folderCount: Number(folderCount?.count ?? 0),
-      percentage: workspace
-        ? Math.round(((workspace.storageUsed ?? 0) / (workspace.storageLimit ?? 1)) * 100)
-        : 0,
+      percentage:
+        enforceQuota && workspace
+          ? Math.round(
+              ((workspace.storageUsed ?? 0) / (workspace.storageLimit ?? 1)) *
+                100,
+            )
+          : null,
     };
   }),
 });

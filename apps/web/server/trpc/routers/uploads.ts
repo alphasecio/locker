@@ -6,6 +6,7 @@ import { files, folders, workspaces } from "@openstore/database";
 import {
   createStorageForWorkspace,
   createStorageForFile,
+  shouldEnforceQuota,
 } from "../../../server/storage";
 import { qmdClient, streamToString } from "../../plugins/handlers/qmd-client";
 import { invalidateWorkspaceVfsSnapshot } from "../../vfs/openstore-vfs";
@@ -33,23 +34,25 @@ export const uploadsRouter = createRouter({
     .mutation(async ({ ctx, input }) => {
       const { db, workspaceId, userId } = ctx;
 
-      // Check storage quota
-      const [ws] = await db
-        .select({
-          storageUsed: workspaces.storageUsed,
-          storageLimit: workspaces.storageLimit,
-        })
-        .from(workspaces)
-        .where(eq(workspaces.id, workspaceId));
+      // Check storage quota (skipped for BYOB and self-hosted/local)
+      if (await shouldEnforceQuota(workspaceId)) {
+        const [ws] = await db
+          .select({
+            storageUsed: workspaces.storageUsed,
+            storageLimit: workspaces.storageLimit,
+          })
+          .from(workspaces)
+          .where(eq(workspaces.id, workspaceId));
 
-      if (
-        !ws ||
-        (ws.storageUsed ?? 0) + input.fileSize > (ws.storageLimit ?? 0)
-      ) {
-        throw new TRPCError({
-          code: "PAYLOAD_TOO_LARGE",
-          message: "Storage quota exceeded",
-        });
+        if (
+          !ws ||
+          (ws.storageUsed ?? 0) + input.fileSize > (ws.storageLimit ?? 0)
+        ) {
+          throw new TRPCError({
+            code: "PAYLOAD_TOO_LARGE",
+            message: "Storage quota exceeded",
+          });
+        }
       }
 
       // Validate folder ownership

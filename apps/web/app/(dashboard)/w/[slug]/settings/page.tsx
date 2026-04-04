@@ -123,18 +123,22 @@ export default function WorkspaceSettingsPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Used</span>
                 <span className="font-medium">
-                  {formatBytes(data.storageUsed)} /{" "}
-                  {formatBytes(data.storageLimit)}
+                  {formatBytes(data.storageUsed)}
+                  {data.storageLimit != null &&
+                    ` / ${formatBytes(data.storageLimit)}`}
+                  {data.storageLimit == null && " (unlimited)"}
                 </span>
               </div>
-              <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full bg-primary rounded-full transition-all"
-                  style={{
-                    width: `${Math.min((data.storageUsed / data.storageLimit) * 100, 100)}%`,
-                  }}
-                />
-              </div>
+              {data.storageLimit != null && (
+                <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded-full transition-all"
+                    style={{
+                      width: `${Math.min((data.storageUsed / data.storageLimit) * 100, 100)}%`,
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}

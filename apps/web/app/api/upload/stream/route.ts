@@ -3,7 +3,10 @@ import { auth } from "../../../../server/auth";
 import { headers } from "next/headers";
 import { getDb } from "@openstore/database/client";
 import { files, workspaces, workspaceMembers } from "@openstore/database";
-import { createStorageForFile } from "../../../../server/storage";
+import {
+  createStorageForFile,
+  shouldEnforceQuotaForConfig,
+} from "../../../../server/storage";
 import { eq, and, sql } from "drizzle-orm";
 import { invalidateWorkspaceVfsSnapshot } from "../../../../server/vfs/openstore-vfs";
 
@@ -91,14 +94,23 @@ export async function PUT(req: NextRequest) {
     );
   }
 
+  // Enforce quota based on where bytes actually land (the file's config),
+  // not the workspace's current config which may have changed since initiate.
   if (
-    (membership.storageUsed ?? 0) + contentLength >
-    (membership.storageLimit ?? 0)
+    await shouldEnforceQuotaForConfig(
+      membership.workspaceId,
+      fileRecord.storageConfigId,
+    )
   ) {
-    return NextResponse.json(
-      { error: "Storage quota exceeded" },
-      { status: 507 },
-    );
+    if (
+      (membership.storageUsed ?? 0) + contentLength >
+      (membership.storageLimit ?? 0)
+    ) {
+      return NextResponse.json(
+        { error: "Storage quota exceeded" },
+        { status: 507 },
+      );
+    }
   }
 
   // Stream the request body to storage

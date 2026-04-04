@@ -11,6 +11,8 @@ import {
 import {
   createStorageForWorkspace,
   createStorageForFile,
+  shouldEnforceQuota,
+  shouldEnforceQuotaForConfig,
 } from "../../../server/storage";
 import { MAX_FILE_SIZE } from "@openstore/common";
 import { eq, and, sql } from "drizzle-orm";
@@ -71,14 +73,6 @@ export async function POST(req: NextRequest) {
 
   const { workspaceId, storageUsed, storageLimit } = membership;
 
-  // Check storage quota
-  if ((storageUsed ?? 0) + file.size > (storageLimit ?? 0)) {
-    return NextResponse.json(
-      { error: "Storage quota exceeded" },
-      { status: 507 },
-    );
-  }
-
   // Validate folder belongs to workspace if provided
   if (folderId) {
     const [folder] = await db
@@ -135,6 +129,24 @@ export async function POST(req: NextRequest) {
     }
 
     existingUploadRecord = uploadRecord;
+  }
+
+  // Check storage quota based on where bytes will actually land:
+  // resumed uploads use the file's config, fresh uploads use current workspace config.
+  const enforceQuota = existingUploadRecord
+    ? await shouldEnforceQuotaForConfig(
+        workspaceId,
+        existingUploadRecord.storageConfigId,
+      )
+    : await shouldEnforceQuota(workspaceId);
+
+  if (enforceQuota) {
+    if ((storageUsed ?? 0) + file.size > (storageLimit ?? 0)) {
+      return NextResponse.json(
+        { error: "Storage quota exceeded" },
+        { status: 507 },
+      );
+    }
   }
 
   // Resolve storage: for resumed uploads use the config recorded at initiate

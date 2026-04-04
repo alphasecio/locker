@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@openstore/database/client";
 import { files, uploadLinks, workspaces } from "@openstore/database";
-import { createStorageForWorkspace } from "../../../../server/storage";
+import {
+  createStorageForWorkspace,
+  shouldEnforceQuota,
+} from "../../../../server/storage";
 import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { verifyLinkPassword } from "@/server/security/password";
@@ -65,20 +68,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Check workspace storage quota
-  const [workspace] = await db
-    .select()
-    .from(workspaces)
-    .where(eq(workspaces.id, link.workspaceId));
+  // Check workspace storage quota (skipped for BYOB and self-hosted/local)
+  if (await shouldEnforceQuota(link.workspaceId)) {
+    const [workspace] = await db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.id, link.workspaceId));
 
-  if (
-    !workspace ||
-    (workspace.storageUsed ?? 0) + file.size > (workspace.storageLimit ?? 0)
-  ) {
-    return NextResponse.json(
-      { error: "Storage quota exceeded" },
-      { status: 507 },
-    );
+    if (
+      !workspace ||
+      (workspace.storageUsed ?? 0) + file.size > (workspace.storageLimit ?? 0)
+    ) {
+      return NextResponse.json(
+        { error: "Storage quota exceeded" },
+        { status: 507 },
+      );
+    }
   }
 
   const { storage, configId, providerName } = await createStorageForWorkspace(
