@@ -133,35 +133,23 @@ export async function transcribeFile(params: {
 
   const { pluginSlug, pluginId, handler, config } = match;
 
-  // Upsert transcription record as "processing"
-  const existing = await db
-    .select({ id: fileTranscriptions.id })
-    .from(fileTranscriptions)
-    .where(
-      and(
-        eq(fileTranscriptions.fileId, fileId),
-        eq(fileTranscriptions.pluginSlug, pluginSlug),
-      ),
-    )
-    .limit(1);
-
-  if (existing.length > 0) {
-    await db
-      .update(fileTranscriptions)
-      .set({
-        status: "processing",
-        errorMessage: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(fileTranscriptions.id, existing[0].id));
-  } else {
-    await db.insert(fileTranscriptions).values({
+  // Atomic upsert: mark as "processing" (or create if first run)
+  await db
+    .insert(fileTranscriptions)
+    .values({
       fileId,
       workspaceId,
       pluginSlug,
       status: "processing",
+    })
+    .onConflictDoUpdate({
+      target: [fileTranscriptions.fileId, fileTranscriptions.pluginSlug],
+      set: {
+        status: "processing",
+        errorMessage: null,
+        updatedAt: new Date(),
+      },
     });
-  }
 
   try {
     const ctx = await buildPluginContext({
