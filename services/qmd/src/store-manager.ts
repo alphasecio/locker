@@ -125,7 +125,7 @@ export async function indexFile(params: {
 
   await withMutex(params.workspaceId, async () => {
     const hash = createHash("sha256").update(params.content).digest("hex");
-    const now = new Date();
+    const now = new Date().toISOString();
 
     await store.internal.insertContent(hash, params.content, now);
     await store.internal.insertDocument(
