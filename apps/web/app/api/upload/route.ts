@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let newFile;
+  let newFile: typeof files.$inferSelect | undefined;
   if (existingFileId) {
     // Update existing record created by uploads.initiate
     [newFile] = await db
@@ -236,6 +236,7 @@ export async function POST(req: NextRequest) {
 
   // Fire-and-forget: index file for search plugins
   if (newFile) {
+    const uploadedFile = newFile;
     void (async () => {
       // Lazily fetch content only if at least one search plugin needs it
       let content: string | undefined;
@@ -243,7 +244,7 @@ export async function POST(req: NextRequest) {
       async function getContent(): Promise<string | undefined> {
         if (content !== undefined) return content;
         try {
-          const dl = await storage.download(newFile.storagePath);
+          const dl = await storage.download(uploadedFile.storagePath);
           content = await streamToString(dl.data);
         } catch {
           content = undefined;
@@ -252,16 +253,16 @@ export async function POST(req: NextRequest) {
       }
 
       // QMD semantic search
-      if (qmdClient.isConfigured() && qmdClient.shouldIndex(newFile.mimeType)) {
+      if (qmdClient.isConfigured() && qmdClient.shouldIndex(uploadedFile.mimeType)) {
         try {
           if (await qmdClient.isActiveForWorkspace(db, workspaceId)) {
             const text = await getContent();
             if (text) {
               await qmdClient.indexFile({
                 workspaceId,
-                fileId: newFile.id,
-                fileName: newFile.name,
-                mimeType: newFile.mimeType,
+                fileId: uploadedFile.id,
+                fileName: uploadedFile.name,
+                mimeType: uploadedFile.mimeType,
                 content: text,
               });
             }
@@ -270,16 +271,16 @@ export async function POST(req: NextRequest) {
       }
 
       // FTS5 full-text search
-      if (ftsClient.isConfigured() && ftsClient.shouldIndex(newFile.mimeType)) {
+      if (ftsClient.isConfigured() && ftsClient.shouldIndex(uploadedFile.mimeType)) {
         try {
           if (await ftsClient.isActiveForWorkspace(db, workspaceId)) {
             const text = await getContent();
             if (text) {
               await ftsClient.indexFile({
                 workspaceId,
-                fileId: newFile.id,
-                fileName: newFile.name,
-                mimeType: newFile.mimeType,
+                fileId: uploadedFile.id,
+                fileName: uploadedFile.name,
+                mimeType: uploadedFile.mimeType,
                 content: text,
               });
             }
