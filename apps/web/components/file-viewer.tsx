@@ -31,6 +31,7 @@ import { TranscriptionViewer } from "@/components/transcription-viewer";
 import { useWorkspace } from "@/lib/workspace-context";
 import { isTextIndexable } from "@locker/common";
 import { toast } from "sonner";
+import { useFileDownload } from "@/hooks/use-file-download";
 import { PDFViewer } from "@/components/pdf-viewer";
 
 /* ------------------------------------------------------------------ */
@@ -211,6 +212,7 @@ export function FileViewer({ fileId }: { fileId: string }) {
   });
 
   const runPluginAction = trpc.plugins.runAction.useMutation();
+  const { download: downloadFile } = useFileDownload();
 
   /* ---- fetch signed URL + text content ---- */
   useEffect(() => {
@@ -248,17 +250,10 @@ export function FileViewer({ fileId }: { fileId: string }) {
   }, [file?.id]);
 
   /* ---- handlers ---- */
-  const handleDownload = useCallback(async () => {
-    try {
-      const result = await getDownloadUrl.mutateAsync({ id: fileId });
-      const a = document.createElement("a");
-      a.href = result.url;
-      a.download = file?.name ?? "download";
-      a.click();
-    } catch {
-      toast.error("Failed to download file");
-    }
-  }, [fileId, file?.name, getDownloadUrl]);
+  const handleDownload = useCallback(
+    () => downloadFile(fileId),
+    [downloadFile, fileId],
+  );
 
   const handlePluginAction = useCallback(
     async (action: {

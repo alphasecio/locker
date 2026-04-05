@@ -40,6 +40,7 @@ import { DraggableFileRow } from "@/components/file-explorer/draggable-file-row"
 import { CommandSearch } from "@/components/command-search";
 import { DesktopDropOverlay } from "@/components/desktop-drop-overlay";
 import { useFileDrop } from "@/hooks/use-file-drop";
+import { useFileDownload } from "@/hooks/use-file-download";
 import { useWorkspace } from "@/lib/workspace-context";
 import { isTextIndexable } from "@locker/common";
 import { toast } from "sonner";
@@ -112,7 +113,7 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
     },
   });
 
-  const getDownloadUrl = trpc.files.getDownloadUrl.useMutation();
+  const { download: downloadFile } = useFileDownload();
   const runPluginAction = trpc.plugins.runAction.useMutation();
 
   const { data: filePluginActions = [] } = trpc.plugins.fileActions.useQuery({
@@ -144,14 +145,8 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
   });
 
   const handleDownload = useCallback(
-    async (fileId: string) => {
-      const result = await getDownloadUrl.mutateAsync({ id: fileId });
-      const a = document.createElement("a");
-      a.href = result.url;
-      a.download = result.filename;
-      a.click();
-    },
-    [getDownloadUrl],
+    (fileId: string) => downloadFile(fileId),
+    [downloadFile],
   );
 
   const handleDesktopDrop = useCallback((files: File[]) => {
