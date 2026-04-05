@@ -27,7 +27,11 @@ export function TranscriptionViewer({
   const { data: transcription, isLoading } =
     trpc.transcriptions.getByFileId.useQuery(
       { fileId: file.id },
-      { enabled: open },
+      {
+        enabled: open,
+        refetchInterval: (query) =>
+          query.state.data?.status === "processing" ? 3000 : false,
+      },
     );
 
   const generate = trpc.transcriptions.generate.useMutation({

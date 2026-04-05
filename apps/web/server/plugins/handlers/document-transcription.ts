@@ -35,7 +35,7 @@ export const documentTranscriptionHandler: PluginHandler = {
         .limit(1);
 
       if (!file) {
-        return { status: "success", message: "File not found" };
+        throw new Error("File not found in this workspace");
       }
 
       // Fire-and-forget regeneration
@@ -91,7 +91,7 @@ export const documentTranscriptionHandler: PluginHandler = {
     // Send to the configured transcription service
     const headers: Record<string, string> = {
       "Content-Type": params.mimeType,
-      "X-File-Name": params.fileName,
+      "X-File-Name": encodeURIComponent(params.fileName),
     };
 
     const apiKey = ctx.secrets.apiKey;
