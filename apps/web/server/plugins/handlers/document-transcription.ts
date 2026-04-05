@@ -3,6 +3,7 @@ import { files } from "@locker/database";
 import { createStorageForFile } from "../../storage";
 import { getBuiltinPluginBySlug } from "../catalog";
 import { transcribeFile } from "../transcription";
+import { transcribeWithAI } from "../../ai/transcribe";
 import type {
   PluginHandler,
   PluginContext,
@@ -12,6 +13,18 @@ import type {
 } from "../types";
 
 const manifest = getBuiltinPluginBySlug("document-transcription")!;
+
+/** Read a ReadableStream into a Buffer. */
+async function streamToBuffer(stream: ReadableStream): Promise<Buffer> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
 
 export const documentTranscriptionHandler: PluginHandler = {
   manifest,
@@ -69,26 +82,25 @@ export const documentTranscriptionHandler: PluginHandler = {
       storageConfigId: string | null;
     },
   ): Promise<TranscriptionResult> {
-    const serviceUrl = ctx.config.serviceUrl as string;
-    if (!serviceUrl) {
-      throw new Error("Document transcription service URL is not configured");
-    }
-
-    // Download the file from storage
     const storage = await createStorageForFile(params.storageConfigId);
     const { data } = await storage.download(params.storagePath);
+    const buffer = await streamToBuffer(data);
+    const model = (ctx.config.model as string) || undefined;
 
-    // Read stream into buffer
-    const reader = data.getReader();
-    const chunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
+    const serviceUrl = (ctx.config.serviceUrl as string) || undefined;
+
+    // If no external service URL is configured, use the built-in AI Gateway
+    if (!serviceUrl) {
+      const content = await transcribeWithAI({
+        buffer,
+        fileName: params.fileName,
+        mimeType: params.mimeType,
+        model,
+      });
+      return { content };
     }
-    const buffer = Buffer.concat(chunks);
 
-    // Send to the configured transcription service
+    // Otherwise, call the external service
     const headers: Record<string, string> = {
       "Content-Type": params.mimeType,
       "X-File-Name": encodeURIComponent(params.fileName),
@@ -99,7 +111,6 @@ export const documentTranscriptionHandler: PluginHandler = {
       headers["Authorization"] = `Bearer ${apiKey}`;
     }
 
-    const model = ctx.config.model as string | undefined;
     if (model) {
       headers["X-Model"] = model;
     }
@@ -107,7 +118,7 @@ export const documentTranscriptionHandler: PluginHandler = {
     const response = await fetch(serviceUrl, {
       method: "POST",
       headers,
-      body: buffer,
+      body: new Uint8Array(buffer),
       signal: AbortSignal.timeout(120_000),
     });
 
@@ -123,7 +134,6 @@ export const documentTranscriptionHandler: PluginHandler = {
 
     if (contentType.includes("application/json")) {
       const json = await response.json();
-      // Support common response shapes: { content }, { text }, { markdown }, or raw string
       content =
         json.content ?? json.text ?? json.markdown ?? JSON.stringify(json);
     } else {
