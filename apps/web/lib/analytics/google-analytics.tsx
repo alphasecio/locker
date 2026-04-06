@@ -8,7 +8,6 @@ export function GoogleAnalytics() {
         src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_TRACKING_ID}`}
         strategy="lazyOnload"
       />
-      <Script src={`https://clearlinks.org/widget.js`} strategy="lazyOnload" />
       <Script id="google-analytics" strategy="lazyOnload">
         {`
             window.dataLayer = window.dataLayer || [];
