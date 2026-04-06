@@ -1,0 +1,6 @@
+[build]
+buildCommand = "cd apps/web && npm run build"
+
+[deploy]
+startCommand = "cd apps/web && npm run start"
+preDeployCommand = "cd packages/database && npx drizzle-kit migrate"
