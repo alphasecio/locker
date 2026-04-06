@@ -17,6 +17,9 @@ import {
   Sparkles,
   FileText,
   Loader2,
+  Tag,
+  File as FileLucide,
+  CalendarDays,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { formatBytes, formatDate } from "@/lib/utils";
@@ -42,7 +45,14 @@ import { DesktopDropOverlay } from "@/components/desktop-drop-overlay";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { useFileDownload } from "@/hooks/use-file-download";
 import { useWorkspace } from "@/lib/workspace-context";
+import { parseAsArrayOf, parseAsString, useQueryState } from "nuqs";
 import { isTextIndexable } from "@locker/common";
+import { TagBadge } from "@/components/tag-badge";
+import { FileTagsDialog } from "@/components/file-tags-dialog";
+import {
+  DataFilter,
+  type FilterColumnDef,
+} from "@/components/file-explorer/data-filter";
 import { toast } from "sonner";
 
 const ROW_GRID =
@@ -75,6 +85,19 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
     id: string;
     name: string;
   } | null>(null);
+  const [tagTarget, setTagTarget] = useState<string | null>(null);
+  const [selectedTagIds, setSelectedTagIds] = useQueryState(
+    "tags",
+    parseAsArrayOf(parseAsString).withDefault([]),
+  );
+  const [selectedFileTypes, setSelectedFileTypes] = useQueryState(
+    "type",
+    parseAsArrayOf(parseAsString).withDefault([]),
+  );
+  const [selectedDates, setSelectedDates] = useQueryState(
+    "date",
+    parseAsArrayOf(parseAsString).withDefault([]),
+  );
 
   const utils = trpc.useUtils();
   const { handleDrop } = useFileDrop();
@@ -88,12 +111,33 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
       parentId: folderId,
     });
 
+  const { data: allTags = [] } = trpc.tags.list.useQuery();
+
   const { data: fileList, isLoading: filesLoading } = trpc.files.list.useQuery({
     folderId,
     page: 1,
     pageSize: 100,
     field: "name",
     direction: "asc",
+    tagSlugs: selectedTagIds.length > 0 ? selectedTagIds : undefined,
+    fileTypes:
+      selectedFileTypes.length > 0
+        ? (selectedFileTypes as (
+            | "image"
+            | "document"
+            | "video"
+            | "audio"
+            | "archive"
+            | "other"
+          )[])
+        : undefined,
+    createdAfter: selectedDates.length > 0 ? selectedDates[0] : undefined,
+    createdBefore:
+      selectedDates.length > 1
+        ? selectedDates[1]
+        : selectedDates.length > 0
+          ? selectedDates[0]
+          : undefined,
   });
 
   const isLoading = foldersLoading || filesLoading;
@@ -132,6 +176,10 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
       { fileIds },
       { enabled: fileIds.length > 0, retry: false },
     );
+  const { data: fileTagsMap = {} } = trpc.tags.getFileTagsBatch.useQuery(
+    { fileIds },
+    { enabled: fileIds.length > 0 },
+  );
   const generateTranscription = trpc.transcriptions.generate.useMutation({
     onSuccess: (result) => {
       if (result.status === "queued") {
@@ -190,6 +238,45 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
     [handleDrop],
   );
 
+  const filterColumns = useMemo<FilterColumnDef[]>(() => {
+    const cols: FilterColumnDef[] = [
+      {
+        id: "type",
+        type: "option",
+        label: "File Type",
+        icon: FileLucide,
+        options: [
+          { label: "Images", value: "image" },
+          { label: "Documents", value: "document" },
+          { label: "Videos", value: "video" },
+          { label: "Audio", value: "audio" },
+          { label: "Archives", value: "archive" },
+          { label: "Other", value: "other" },
+        ],
+      },
+      {
+        id: "date",
+        type: "date",
+        label: "Upload Date",
+        icon: CalendarDays,
+      },
+    ];
+    if (allTags.length > 0) {
+      cols.push({
+        id: "tags",
+        type: "option",
+        label: "Tags",
+        icon: Tag,
+        options: allTags.map((t) => ({
+          label: t.name,
+          value: t.slug,
+          color: t.color,
+        })),
+      });
+    }
+    return cols;
+  }, [allTags]);
+
   const folders = folderList ?? [];
   const files = fileList?.items ?? [];
   const isEmpty = folders.length === 0 && files.length === 0;
@@ -240,8 +327,36 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
         </div>
       </header>
 
+      {/* Filter bar */}
+      {filterColumns.length > 0 && (
+        <div className="px-6 pt-4">
+          <DataFilter
+            columns={filterColumns}
+            activeFilters={{
+              tags: selectedTagIds,
+              type: selectedFileTypes,
+              date: selectedDates,
+            }}
+            onFilterChange={(columnId, values) => {
+              if (columnId === "tags") {
+                setSelectedTagIds(values.length > 0 ? values : null);
+              } else if (columnId === "type") {
+                setSelectedFileTypes(values.length > 0 ? values : null);
+              } else if (columnId === "date") {
+                setSelectedDates(values.length > 0 ? values : null);
+              }
+            }}
+            onClearAll={() => {
+              setSelectedTagIds(null);
+              setSelectedFileTypes(null);
+              setSelectedDates(null);
+            }}
+          />
+        </div>
+      )}
+
       {/* Content */}
-      <div className="p-6">
+      <div className={filterColumns.length > 0 ? "px-6 pb-6 pt-4" : "p-6"}>
         {/* File List */}
         {isLoading ? (
           <div className="rounded-lg border bg-card overflow-hidden">
@@ -433,6 +548,22 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
                     className="size-4 shrink-0"
                   />
                   <span className="text-sm truncate">{file.name}</span>
+                  {fileTagsMap[file.id]?.length > 0 && (
+                    <div className="hidden sm:flex items-center gap-1 shrink-0">
+                      {fileTagsMap[file.id].slice(0, 3).map((tag) => (
+                        <TagBadge
+                          key={tag.id}
+                          name={tag.name}
+                          color={tag.color}
+                        />
+                      ))}
+                      {fileTagsMap[file.id].length > 3 && (
+                        <span className="text-xs text-muted-foreground">
+                          +{fileTagsMap[file.id].length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="hidden sm:block">
                   <span className="text-xs font-mono text-muted-foreground tabular-nums">
@@ -497,6 +628,10 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
                       >
                         <BarChart3 />
                         Track
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setTagTarget(file.id)}>
+                        <Tag />
+                        Edit Tags
                       </DropdownMenuItem>
                       {filePluginActions.length > 0 && (
                         <>
@@ -642,6 +777,13 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
           open={!!transcriptionTarget}
           onOpenChange={(open) => !open && setTranscriptionTarget(null)}
           file={transcriptionTarget}
+        />
+      )}
+      {tagTarget && (
+        <FileTagsDialog
+          open={!!tagTarget}
+          onOpenChange={(open) => !open && setTagTarget(null)}
+          fileId={tagTarget}
         />
       )}
     </div>

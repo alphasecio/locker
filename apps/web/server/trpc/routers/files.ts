@@ -8,16 +8,24 @@ import {
   sql,
   ilike,
   inArray,
+  not,
   or,
+  gte,
+  lt,
 } from "drizzle-orm";
 import { createRouter, workspaceProcedure } from "../init";
-import { files, workspaces, folders } from "@locker/database";
+import { files, workspaces, folders, fileTags, tags } from "@locker/database";
 import { createStorageForFile } from "../../../server/storage";
 import {
   renameFileSchema,
   moveItemSchema,
   paginationSchema,
   sortSchema,
+  IMAGE_MIME_TYPES,
+  DOCUMENT_MIME_TYPES,
+  VIDEO_MIME_TYPES,
+  AUDIO_MIME_TYPES,
+  ARCHIVE_MIME_TYPES,
 } from "@locker/common";
 import { enhanceSearchResultsWithPlugins } from "../../plugins/search";
 import { qmdClient } from "../../plugins/handlers/qmd-client";
@@ -31,13 +39,39 @@ export const filesRouter = createRouter({
       z.object({
         folderId: z.string().uuid().nullable().default(null),
         search: z.string().optional(),
+        tagSlugs: z.array(z.string()).optional(),
+        fileTypes: z
+          .array(
+            z.enum([
+              "image",
+              "document",
+              "video",
+              "audio",
+              "archive",
+              "other",
+            ]),
+          )
+          .optional(),
+        createdAfter: z.string().date().optional(),
+        createdBefore: z.string().date().optional(),
         ...paginationSchema.shape,
         ...sortSchema.shape,
       }),
     )
     .query(async ({ ctx, input }) => {
       const { db } = ctx;
-      const { folderId, search, page, pageSize, field, direction } = input;
+      const {
+        folderId,
+        search,
+        tagSlugs,
+        fileTypes,
+        createdAfter,
+        createdBefore,
+        page,
+        pageSize,
+        field,
+        direction,
+      } = input;
 
       const conditions = [eq(files.workspaceId, ctx.workspaceId)];
 
@@ -105,6 +139,82 @@ export const filesRouter = createRouter({
         conditions.push(
           folderId ? eq(files.folderId, folderId) : isNull(files.folderId),
         );
+      }
+
+      // Tag filtering (AND semantics: file must have ALL selected tags)
+      if (tagSlugs && tagSlugs.length > 0) {
+        conditions.push(
+          inArray(
+            files.id,
+            db
+              .select({ fileId: fileTags.fileId })
+              .from(fileTags)
+              .innerJoin(tags, eq(fileTags.tagId, tags.id))
+              .where(
+                and(
+                  inArray(tags.slug, tagSlugs),
+                  eq(tags.workspaceId, ctx.workspaceId),
+                ),
+              )
+              .groupBy(fileTags.fileId)
+              .having(
+                sql`count(distinct ${fileTags.tagId}) = ${tagSlugs.length}`,
+              ),
+          ),
+        );
+      }
+
+      // File type filtering (OR semantics: file matches ANY selected type)
+      if (fileTypes && fileTypes.length > 0) {
+        const categoryMap: Record<string, readonly string[]> = {
+          image: IMAGE_MIME_TYPES,
+          document: DOCUMENT_MIME_TYPES,
+          video: VIDEO_MIME_TYPES,
+          audio: AUDIO_MIME_TYPES,
+          archive: ARCHIVE_MIME_TYPES,
+        };
+
+        const mimeTypes: string[] = [];
+        let includeOther = false;
+
+        for (const type of fileTypes) {
+          if (type === "other") {
+            includeOther = true;
+          } else if (categoryMap[type]) {
+            mimeTypes.push(...categoryMap[type]);
+          }
+        }
+
+        const allKnownMimeTypes: string[] = [
+          ...IMAGE_MIME_TYPES,
+          ...DOCUMENT_MIME_TYPES,
+          ...VIDEO_MIME_TYPES,
+          ...AUDIO_MIME_TYPES,
+          ...ARCHIVE_MIME_TYPES,
+        ];
+
+        if (mimeTypes.length > 0 && includeOther) {
+          conditions.push(
+            or(
+              inArray(files.mimeType, mimeTypes),
+              not(inArray(files.mimeType, allKnownMimeTypes)),
+            )!,
+          );
+        } else if (mimeTypes.length > 0) {
+          conditions.push(inArray(files.mimeType, mimeTypes));
+        } else if (includeOther) {
+          conditions.push(not(inArray(files.mimeType, allKnownMimeTypes)));
+        }
+      }
+
+      // Date filtering (inclusive range on createdAt)
+      if (createdAfter) {
+        conditions.push(gte(files.createdAt, new Date(createdAfter)));
+      }
+      if (createdBefore) {
+        const endOfDay = new Date(createdBefore);
+        endOfDay.setDate(endOfDay.getDate() + 1);
+        conditions.push(lt(files.createdAt, endOfDay));
       }
 
       const orderBy =
