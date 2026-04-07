@@ -2,6 +2,8 @@
 
 Open-source file storage platform. A self-hostable alternative to Dropbox and Google Drive.
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/locker-or-self-hostable-dropbox-or-googl?referralCode=alphasec)
+
 ## Features
 
 - **File Explorer** — Upload, organize, rename, move, and delete files and folders
