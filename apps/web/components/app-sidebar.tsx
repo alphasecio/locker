@@ -18,13 +18,11 @@ import {
   PanelLeftOpen,
   Plus,
   ChevronsUpDown,
-  Tag,
 } from "lucide-react";
 import { Logo } from "@/assets/logo";
 import { signOut } from "@/lib/auth/client";
 import { trpc } from "@/lib/trpc/client";
 import { StorageUsage } from "./storage-usage";
-import { ManageTagsDialog } from "./manage-tags-dialog";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -122,8 +120,6 @@ export function AppSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const [showManageTags, setShowManageTags] = useState(false);
-
   const slugMatch = pathname.match(/\/w\/([^/]+)/);
   const slug = slugMatch?.[1] ?? "";
   const prefix = `/w/${slug}`;
@@ -133,12 +129,6 @@ export function AppSidebar({
 
   const navItems = [
     { href: prefix, label: "My Files", icon: FolderOpen, key: "files" },
-    {
-      key: "tags",
-      label: "Tags",
-      icon: Tag,
-      onClick: () => setShowManageTags(true),
-    },
     {
       href: `${prefix}/shared-links`,
       label: "Share Links",
@@ -287,17 +277,14 @@ export function AppSidebar({
           <NavSection label="Files" collapsed={collapsed}>
             {navItems.map((item) => {
               const isActive =
-                "onClick" in item
-                  ? false
-                  : item.key === "files"
-                    ? pathname === prefix ||
-                      pathname.startsWith(`${prefix}/folder`)
-                    : pathname.startsWith(item.href!);
+                item.key === "files"
+                  ? pathname === prefix ||
+                    pathname.startsWith(`${prefix}/folder`)
+                  : pathname.startsWith(item.href);
               return (
                 <NavItem
                   key={item.key}
-                  href={"href" in item ? item.href : undefined}
-                  onClick={"onClick" in item ? item.onClick : undefined}
+                  href={item.href}
                   icon={item.icon}
                   label={item.label}
                   isActive={isActive}
@@ -366,10 +353,6 @@ export function AppSidebar({
         )}
       </div>
 
-      <ManageTagsDialog
-        open={showManageTags}
-        onOpenChange={setShowManageTags}
-      />
     </div>
   );
 }
