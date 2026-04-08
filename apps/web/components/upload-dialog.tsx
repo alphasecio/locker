@@ -2,12 +2,17 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, X, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { Upload, X, CheckCircle, AlertCircle, Loader2, Tag, Check } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { cn, formatBytes } from "@/lib/utils";
 import { FileIcon } from "@/components/file-icon";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useWorkspace } from "@/lib/workspace-context";
 import { uploadFile } from "@/lib/upload";
 import { toast } from "sonner";
@@ -41,13 +46,18 @@ export function UploadDialog({
   const [files, setFiles] = useState<UploadFileEntry[]>([]);
   const [uploading, setUploading] = useState(false);
   const [initializedFor, setInitializedFor] = useState<File[] | null>(null);
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const abortControllerRef = useRef<AbortController | null>(null);
   const utils = trpc.useUtils();
   const workspace = useWorkspace();
 
+  const { data: allTags = [] } = trpc.tags.list.useQuery(undefined, {
+    enabled: open,
+  });
   const initiateMutation = trpc.uploads.initiate.useMutation();
   const completeMutation = trpc.uploads.complete.useMutation();
   const abortMutation = trpc.uploads.abort.useMutation();
+  const setFileTagsMutation = trpc.tags.setFileTags.useMutation();
 
   // Populate files when opened with initialFiles (from desktop drop)
   useEffect(() => {
@@ -106,7 +116,7 @@ export function UploadDialog({
       );
 
       try {
-        await uploadFile({
+        const fileId = await uploadFile({
           file: entry.file,
           folderId,
           workspaceSlug: workspace.slug,
@@ -124,6 +134,13 @@ export function UploadDialog({
           },
           abortSignal: controller.signal,
         });
+
+        if (selectedTagIds.size > 0) {
+          await setFileTagsMutation.mutateAsync({
+            fileId,
+            tagIds: [...selectedTagIds],
+          });
+        }
 
         successCount++;
         setFiles((prev) =>
@@ -148,6 +165,9 @@ export function UploadDialog({
     abortControllerRef.current = null;
     utils.files.list.invalidate();
     utils.storage.usage.invalidate();
+    if (selectedTagIds.size > 0) {
+      utils.tags.getFileTagsBatch.invalidate();
+    }
     if (!controller.signal.aborted) {
       if (errorCount > 0 && successCount === 0) {
         toast.error("Upload failed");
@@ -167,8 +187,18 @@ export function UploadDialog({
     if (!uploading) {
       setFiles([]);
       setInitializedFor(null);
+      setSelectedTagIds(new Set());
       onOpenChange(open);
     }
+  };
+
+  const toggleTag = (tagId: string) => {
+    setSelectedTagIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(tagId)) next.delete(tagId);
+      else next.add(tagId);
+      return next;
+    });
   };
 
   const pendingCount = files.filter((f) => f.status === "pending").length;
@@ -251,10 +281,62 @@ export function UploadDialog({
         )}
 
         {pendingCount > 0 && !uploading && (
-          <Button onClick={handleUpload} className="w-full">
-            <Upload />
-            Upload {pendingCount} {pendingCount === 1 ? "file" : "files"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "gap-1.5 shrink-0",
+                    selectedTagIds.size > 0 && "text-primary border-primary/30",
+                  )}
+                >
+                  <Tag className="size-3.5" />
+                  {selectedTagIds.size > 0 ? (
+                    <span>
+                      {selectedTagIds.size} tag
+                      {selectedTagIds.size !== 1 ? "s" : ""}
+                    </span>
+                  ) : (
+                    <span>Tag</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-52 p-1">
+                {allTags.length === 0 ? (
+                  <p className="px-3 py-4 text-xs text-muted-foreground text-center">
+                    No tags yet
+                  </p>
+                ) : (
+                  <div className="max-h-48 overflow-y-auto">
+                    {allTags.map((tag) => (
+                      <button
+                        key={tag.id}
+                        onClick={() => toggleTag(tag.id)}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-muted transition-colors"
+                      >
+                        <div
+                          className="size-2.5 rounded-full shrink-0"
+                          style={{
+                            backgroundColor: tag.color ?? "#6b7280",
+                          }}
+                        />
+                        <span className="flex-1 truncate">{tag.name}</span>
+                        {selectedTagIds.has(tag.id) && (
+                          <Check className="size-3.5 text-primary shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+            <Button onClick={handleUpload} className="flex-1">
+              <Upload />
+              Upload {pendingCount} {pendingCount === 1 ? "file" : "files"}
+            </Button>
+          </div>
         )}
 
         {uploading && (
