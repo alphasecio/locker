@@ -12,6 +12,7 @@ import {
   workspaceMembers,
   workspaceInvites,
   users,
+  notifications,
 } from "@locker/database";
 import { inviteMemberSchema, updateMemberRoleSchema } from "@locker/common";
 import crypto from "crypto";
@@ -294,32 +295,32 @@ export const membersRouter = createRouter({
           ),
         );
 
-      if (existing.length > 0) {
-        await ctx.db
-          .update(workspaceInvites)
-          .set({ status: "accepted" })
-          .where(eq(workspaceInvites.id, invite.id));
-
-        const [ws] = await ctx.db
-          .select({ slug: workspaces.slug })
-          .from(workspaces)
-          .where(eq(workspaces.id, invite.workspaceId));
-
-        return { workspaceSlug: ws?.slug };
+      if (existing.length === 0) {
+        // Add as member
+        await ctx.db.insert(workspaceMembers).values({
+          workspaceId: invite.workspaceId,
+          userId: ctx.userId,
+          role: invite.role,
+        });
       }
-
-      // Add as member
-      await ctx.db.insert(workspaceMembers).values({
-        workspaceId: invite.workspaceId,
-        userId: ctx.userId,
-        role: invite.role,
-      });
 
       // Mark invite as accepted
       await ctx.db
         .update(workspaceInvites)
         .set({ status: "accepted" })
         .where(eq(workspaceInvites.id, invite.id));
+
+      // Mark the related notification as read so it doesn't show a stale link
+      await ctx.db
+        .update(notifications)
+        .set({ read: true })
+        .where(
+          and(
+            eq(notifications.userId, ctx.userId),
+            eq(notifications.type, "workspace_invite"),
+            eq(notifications.actionUrl, `/invite/${input.token}`),
+          ),
+        );
 
       const [ws] = await ctx.db
         .select({ slug: workspaces.slug })
