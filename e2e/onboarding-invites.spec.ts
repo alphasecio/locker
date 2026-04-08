@@ -69,6 +69,9 @@ test.describe.serial("Onboarding with pending invites", () => {
   // ── Step 3: Inviter sends invite to invitee ────────────────────────
 
   test("inviter sends invite to invitee", async ({ page }) => {
+    // Clear any session from previous test
+    await page.context().clearCookies();
+
     // Login as inviter
     await page.goto("/login");
     await page.getByPlaceholder("you@example.com").fill(INVITER.email);
@@ -99,6 +102,7 @@ test.describe.serial("Onboarding with pending invites", () => {
   // ── Step 4: Invitee sees invite on onboarding page ─────────────────
 
   test("invitee sees pending invite on onboarding page", async ({ page }) => {
+    await page.context().clearCookies();
     await page.goto("/login");
     await page.getByPlaceholder("you@example.com").fill(INVITEE.email);
     await page.getByPlaceholder("Enter password").fill(INVITEE.password);
@@ -126,6 +130,7 @@ test.describe.serial("Onboarding with pending invites", () => {
   // ── Step 5: Invitee accepts invite from onboarding ─────────────────
 
   test("invitee accepts invite and lands in workspace", async ({ page }) => {
+    await page.context().clearCookies();
     await page.goto("/login");
     await page.getByPlaceholder("you@example.com").fill(INVITEE.email);
     await page.getByPlaceholder("Enter password").fill(INVITEE.password);

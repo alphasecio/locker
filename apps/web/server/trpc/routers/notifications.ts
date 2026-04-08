@@ -1,7 +1,18 @@
 import { z } from "zod";
-import { eq, and, desc, lt, sql } from "drizzle-orm";
+import { eq, and, desc, lt, or, sql } from "drizzle-orm";
 import { createRouter, protectedProcedure } from "../init";
 import { notifications } from "@locker/database";
+
+function encodeCursor(row: { createdAt: Date; id: string }): string {
+  return Buffer.from(
+    JSON.stringify({ createdAt: row.createdAt.toISOString(), id: row.id }),
+  ).toString("base64");
+}
+
+function decodeCursor(cursor: string): { createdAt: Date; id: string } {
+  const parsed = JSON.parse(Buffer.from(cursor, "base64").toString());
+  return { createdAt: new Date(parsed.createdAt), id: parsed.id };
+}
 
 export const notificationsRouter = createRouter({
   /** List notifications for the current user, newest first */
@@ -10,30 +21,39 @@ export const notificationsRouter = createRouter({
       z
         .object({
           limit: z.number().min(1).max(100).default(50),
-          cursor: z.string().uuid().optional(),
+          cursor: z.string().optional(),
         })
         .optional(),
     )
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 50;
-      const cursor = input?.cursor;
 
       const conditions = [eq(notifications.userId, ctx.userId)];
-      if (cursor) {
-        conditions.push(lt(notifications.id, cursor));
+
+      if (input?.cursor) {
+        const { createdAt, id } = decodeCursor(input.cursor);
+        conditions.push(
+          or(
+            lt(notifications.createdAt, createdAt),
+            and(
+              eq(notifications.createdAt, createdAt),
+              lt(notifications.id, id),
+            ),
+          )!,
+        );
       }
 
       const rows = await ctx.db
         .select()
         .from(notifications)
         .where(and(...conditions))
-        .orderBy(desc(notifications.createdAt))
+        .orderBy(desc(notifications.createdAt), desc(notifications.id))
         .limit(limit + 1);
 
       let nextCursor: string | undefined;
       if (rows.length > limit) {
         const next = rows.pop()!;
-        nextCursor = next.id;
+        nextCursor = encodeCursor(next);
       }
 
       return { items: rows, nextCursor };

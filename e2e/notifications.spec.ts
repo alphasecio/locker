@@ -148,11 +148,12 @@ test.describe.serial("Notifications flows", () => {
     });
     await page.waitForTimeout(1000);
 
-    // Sign out the second user
-    await page.goto("/login");
-    await page.waitForTimeout(500);
+    // Sign out the second user explicitly
+    await page.context().clearCookies();
 
     // Login as the first user and send an invite
+    await page.goto("/login");
+    await page.waitForTimeout(500);
     await page.getByPlaceholder("you@example.com").fill(TEST_USER.email);
     await page.getByPlaceholder("Enter password").fill(TEST_USER.password);
     await page.getByRole("button", { name: /sign in/i }).click();
@@ -174,7 +175,8 @@ test.describe.serial("Notifications flows", () => {
     await page.getByRole("button", { name: /invite/i }).click();
     await page.waitForTimeout(2000);
 
-    // Now login as the second user and check notifications
+    // Sign out first user and login as second user to check notifications
+    await page.context().clearCookies();
     await page.goto("/login");
     await page.waitForTimeout(500);
     await page.getByPlaceholder("you@example.com").fill(SECOND_USER.email);
