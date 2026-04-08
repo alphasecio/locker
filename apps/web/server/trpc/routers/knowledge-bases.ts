@@ -202,9 +202,6 @@ export const knowledgeBasesRouter = createRouter({
         });
       }
 
-      const slugPart = generateTagSlug(input.name) || "kb";
-      const wikiStoragePath = `${ctx.workspaceId}/.kb/${slugPart}/wiki/`;
-
       const [kb] = await ctx.db
         .insert(knowledgeBases)
         .values({
@@ -213,9 +210,17 @@ export const knowledgeBasesRouter = createRouter({
           name: input.name,
           description: input.description,
           schemaPrompt: input.schemaPrompt ?? "",
-          wikiStoragePath,
+          // Placeholder — overwritten below with the real ID-based path
+          wikiStoragePath: "",
         })
         .returning();
+
+      const slugPart = generateTagSlug(input.name) || "kb";
+      const wikiStoragePath = `${ctx.workspaceId}/.kb/${slugPart}-${kb.id.slice(0, 8)}/wiki/`;
+      await ctx.db
+        .update(knowledgeBases)
+        .set({ wikiStoragePath })
+        .where(eq(knowledgeBases.id, kb.id));
 
       // Insert join table rows
       await ctx.db.insert(kbTags).values(
@@ -259,14 +264,6 @@ export const knowledgeBasesRouter = createRouter({
         const ingestFn = handler?.ingest;
 
         if (ingestFn) {
-          const pluginCtx = await buildPluginContext({
-            db: ctx.db,
-            workspaceId: ctx.workspaceId,
-            userId: ctx.userId,
-            pluginId: kb.id,
-            config: {},
-          });
-
           void (async () => {
             try {
               for (const fileId of uniqueFileIds) {
@@ -298,6 +295,12 @@ export const knowledgeBasesRouter = createRouter({
                 .catch(() => {});
             }
           })();
+        } else {
+          // Handler not available — reset so the KB doesn't stay stuck in "building"
+          await ctx.db
+            .update(knowledgeBases)
+            .set({ status: "active", updatedAt: new Date() })
+            .where(eq(knowledgeBases.id, kb.id));
         }
       }
 
@@ -472,7 +475,6 @@ export const knowledgeBasesRouter = createRouter({
 
       // Read each page content and extract [[links]]
       const edges: Array<{ source: string; target: string }> = [];
-      const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
 
       await Promise.all(
         pages.map(async (page) => {
@@ -481,6 +483,8 @@ export const knowledgeBasesRouter = createRouter({
               `${kb.wikiStoragePath}${page.path}`,
             );
             const content = await streamToString(data);
+            // Each callback needs its own regex instance (g flag is stateful)
+            const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
             let linkMatch: RegExpExecArray | null;
             while ((linkMatch = wikiLinkRegex.exec(content)) !== null) {
               const slug = linkMatch[1];
