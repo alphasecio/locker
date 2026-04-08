@@ -422,7 +422,8 @@ export const knowledgeBasesRouter = createRouter({
         .where(eq(fileTags.tagId, kb.tagId));
 
       const handler = getHandler("knowledge-base");
-      if (!handler?.ingest) {
+      const ingestFn = handler?.ingest;
+      if (!ingestFn) {
         // Reset status since we can't proceed
         await ctx.db
           .update(knowledgeBases)
@@ -478,7 +479,7 @@ export const knowledgeBasesRouter = createRouter({
                 fileContent = transcription.content;
               }
 
-              await handler.ingest(pluginCtx, {
+              await ingestFn(pluginCtx, {
                 knowledgeBaseId: kb.id,
                 fileId: file.id,
                 fileName: file.name,
