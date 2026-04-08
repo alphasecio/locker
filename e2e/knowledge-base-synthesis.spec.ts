@@ -118,14 +118,15 @@ test.describe.serial("Knowledge Base synthesis flows", () => {
   test("setup: register, create workspace, upload files, create KB", async ({
     page,
   }) => {
+    // Pre-dismiss KB announcement modal for all page loads
+    await dismissKBAnnouncementViaStorage(page);
+
     // Register
     await page.goto("/register");
     await page.getByPlaceholder("Your name").fill(TEST_USER.name);
     await page.getByPlaceholder("you@example.com").fill(TEST_USER.email);
     await page.getByPlaceholder("Choose a password").fill(TEST_USER.password);
     await page.getByRole("button", { name: /create account/i }).click();
-    // Pre-dismiss KB announcement modal before workspace loads
-    await dismissKBAnnouncementViaStorage(page);
     await page.waitForURL("/onboarding", { timeout: 15000 });
     await page.getByPlaceholder("e.g. Acme Inc").fill("Synthesis Workspace");
     await page.getByRole("button", { name: /create workspace/i }).click();
@@ -543,11 +544,8 @@ test.describe.serial("Knowledge Base synthesis flows", () => {
 // ── Helpers ──────────────────────────────────────────────────────────────
 
 async function loginAs(page: Page) {
+  await dismissKBAnnouncementViaStorage(page);
   await page.goto("/login");
-  // Pre-dismiss KB announcement modal before workspace loads
-  await page.evaluate(() =>
-    localStorage.setItem("openstore:kb-announcement-dismissed", "1"),
-  );
   await page.getByPlaceholder("you@example.com").fill(TEST_USER.email);
   await page.getByPlaceholder("Enter password").fill(TEST_USER.password);
   await page.getByRole("button", { name: /sign in/i }).click();
