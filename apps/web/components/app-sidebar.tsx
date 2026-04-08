@@ -18,6 +18,11 @@ import {
   PanelLeftOpen,
   Plus,
   ChevronsUpDown,
+  BookOpen,
+  Brain,
+  MessageSquare,
+  Bot,
+  type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/assets/logo";
 import { signOut } from "@/lib/auth/client";
@@ -36,6 +41,23 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+/**
+ * Maps plugin manifest icon names to Lucide components.
+ * Add entries here when a plugin uses a new icon name in its sidebarItem.
+ * Falls back to `Puzzle` if the icon name isn't found.
+ */
+const SIDEBAR_ICON_MAP: Record<string, LucideIcon> = {
+  "book-open": BookOpen,
+  brain: Brain,
+  "message-square": MessageSquare,
+  bot: Bot,
+  puzzle: Puzzle,
+  "bar-chart": BarChart3,
+  terminal: TerminalSquare,
+  settings: Settings,
+  folder: FolderOpen,
+};
 
 function NavItem({
   href,
@@ -127,6 +149,20 @@ export function AppSidebar({
   const { data: workspacesList } = trpc.workspaces.list.useQuery();
   const currentWorkspace = workspacesList?.find((w) => w.slug === slug) ?? null;
 
+  const { data: installedPlugins } = trpc.plugins.installed.useQuery();
+
+  const pluginNavItems = (installedPlugins ?? [])
+    .filter((p) => p.status === "active" && p.manifest.sidebarItem)
+    .map((p) => {
+      const sb = p.manifest.sidebarItem!;
+      return {
+        href: `${prefix}${sb.path}`,
+        label: sb.label,
+        icon: SIDEBAR_ICON_MAP[sb.icon] ?? Puzzle,
+        key: `plugin-${p.pluginSlug}`,
+      };
+    });
+
   const navItems = [
     { href: prefix, label: "My Files", icon: FolderOpen, key: "files" },
     {
@@ -148,16 +184,20 @@ export function AppSidebar({
       key: "tracked",
     },
     {
-      href: `${prefix}/plugins`,
-      label: "Plugins",
-      icon: Puzzle,
-      key: "plugins",
-    },
-    {
       href: `${prefix}/terminal`,
       label: "Terminal",
       icon: TerminalSquare,
       key: "terminal",
+    },
+  ];
+
+  const pluginSectionItems = [
+    ...pluginNavItems,
+    {
+      href: `${prefix}/plugins`,
+      label: "Plugins",
+      icon: Puzzle,
+      key: "plugins",
     },
   ];
 
@@ -281,6 +321,22 @@ export function AppSidebar({
                   ? pathname === prefix ||
                     pathname.startsWith(`${prefix}/folder`)
                   : pathname.startsWith(item.href);
+              return (
+                <NavItem
+                  key={item.key}
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  isActive={isActive}
+                  collapsed={collapsed}
+                />
+              );
+            })}
+          </NavSection>
+
+          <NavSection label="Plugins" collapsed={collapsed}>
+            {pluginSectionItems.map((item) => {
+              const isActive = pathname.startsWith(item.href);
               return (
                 <NavItem
                   key={item.key}
