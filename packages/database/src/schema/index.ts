@@ -10,3 +10,6 @@ export * from "./tracked-links";
 export * from "./plugins";
 export * from "./workspace-storage-configs";
 export * from "./file-transcriptions";
+export * from "./tags";
+export * from "./knowledge-bases";
+export * from "./notifications";

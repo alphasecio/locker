@@ -89,6 +89,7 @@ export const PLUGIN_CAPABILITIES = [
   "folder_actions",
   "import_export",
   "document_transcription",
+  "conversational_panel",
 ] as const;
 export type PluginCapability = (typeof PLUGIN_CAPABILITIES)[number];
 
@@ -125,6 +126,16 @@ export const pluginConfigFieldSchema = z.object({
   type: pluginConfigFieldTypeSchema,
   required: z.boolean().default(false),
   placeholder: z.string().max(200).optional(),
+});
+
+export const pluginSidebarItemSchema = z.object({
+  label: z.string().min(1).max(80),
+  icon: z.string().min(1).max(60),
+  path: z
+    .string()
+    .min(1)
+    .max(200)
+    .regex(/^\//, "Sidebar item path must start with /"),
 });
 
 export const pluginTranscriptionSchema = z.object({
@@ -168,6 +179,7 @@ export const pluginManifestSchema = z
     actions: z.array(pluginActionSchema).default([]),
     configFields: z.array(pluginConfigFieldSchema).default([]),
     transcription: pluginTranscriptionSchema.optional(),
+    sidebarItem: pluginSidebarItemSchema.optional(),
   })
   .superRefine((value, ctx) => {
     const permissionSet = new Set(value.permissions);

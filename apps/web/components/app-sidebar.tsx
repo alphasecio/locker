@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   FolderOpen,
   Share2,
   Upload,
-  LogOut,
   Settings,
   Users,
   Key,
@@ -18,11 +17,19 @@ import {
   PanelLeftOpen,
   Plus,
   ChevronsUpDown,
+  BookOpen,
+  Brain,
+  MessageSquare,
+  Bot,
+  User,
+  Boxes,
+  Bell,
+  type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/assets/logo";
-import { signOut } from "@/lib/auth/client";
 import { trpc } from "@/lib/trpc/client";
 import { StorageUsage } from "./storage-usage";
+import { UserMenu } from "./user-menu";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -37,30 +44,55 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+/**
+ * Maps plugin manifest icon names to Lucide components.
+ * Add entries here when a plugin uses a new icon name in its sidebarItem.
+ * Falls back to `Puzzle` if the icon name isn't found.
+ */
+const SIDEBAR_ICON_MAP: Record<string, LucideIcon> = {
+  "book-open": BookOpen,
+  brain: Brain,
+  "message-square": MessageSquare,
+  bot: Bot,
+  puzzle: Puzzle,
+  "bar-chart": BarChart3,
+  terminal: TerminalSquare,
+  settings: Settings,
+  folder: FolderOpen,
+};
+
+type SidebarArea = "workspace" | "account";
+
 function NavItem({
   href,
+  onClick,
   icon: Icon,
   label,
   isActive,
   collapsed,
 }: {
-  href: string;
+  href?: string;
+  onClick?: () => void;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   isActive: boolean;
   collapsed: boolean;
 }) {
-  const link = (
-    <Link
-      href={href}
-      className={cn(
-        "group/nav relative flex h-8 items-center gap-2 rounded-lg p-2 text-sm transition-colors",
-        isActive
-          ? "bg-accent text-foreground"
-          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-        collapsed ? "w-8 justify-center" : "w-full",
-      )}
-    >
+  const classes = cn(
+    "group/nav relative flex h-8 items-center gap-2 rounded-lg p-2 text-sm transition-colors",
+    isActive
+      ? "bg-accent text-foreground"
+      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+    collapsed ? "w-8 justify-center" : "w-full",
+  );
+
+  const content = onClick ? (
+    <button onClick={onClick} className={classes}>
+      <Icon className="size-4 shrink-0" />
+      {!collapsed && <span className="truncate">{label}</span>}
+    </button>
+  ) : (
+    <Link href={href!} className={classes}>
       <Icon className="size-4 shrink-0" />
       {!collapsed && <span className="truncate">{label}</span>}
     </Link>
@@ -69,7 +101,7 @@ function NavItem({
   if (collapsed) {
     return (
       <Tooltip>
-        <TooltipTrigger asChild>{link}</TooltipTrigger>
+        <TooltipTrigger asChild>{content}</TooltipTrigger>
         <TooltipContent side="right" sideOffset={8}>
           {label}
         </TooltipContent>
@@ -77,7 +109,7 @@ function NavItem({
     );
   }
 
-  return link;
+  return content;
 }
 
 function NavSection({
@@ -113,69 +145,39 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const utils = trpc.useUtils();
   const [collapsed, setCollapsed] = useState(false);
 
   const slugMatch = pathname.match(/\/w\/([^/]+)/);
   const slug = slugMatch?.[1] ?? "";
   const prefix = `/w/${slug}`;
 
+  const area: SidebarArea = useMemo(() => {
+    if (pathname.startsWith("/settings")) return "account";
+    return "workspace";
+  }, [pathname]);
+
+  const isWorkspace = area === "workspace";
+
   const { data: workspacesList } = trpc.workspaces.list.useQuery();
   const currentWorkspace = workspacesList?.find((w) => w.slug === slug) ?? null;
 
-  const navItems = [
-    { href: prefix, label: "My Files", icon: FolderOpen, key: "files" },
-    {
-      href: `${prefix}/shared-links`,
-      label: "Share Links",
-      icon: Share2,
-      key: "shares",
-    },
-    {
-      href: `${prefix}/upload-links`,
-      label: "Upload Links",
-      icon: Upload,
-      key: "uploads",
-    },
-    {
-      href: `${prefix}/tracked-links`,
-      label: "Tracked Links",
-      icon: BarChart3,
-      key: "tracked",
-    },
-    {
-      href: `${prefix}/plugins`,
-      label: "Plugins",
-      icon: Puzzle,
-      key: "plugins",
-    },
-    {
-      href: `${prefix}/terminal`,
-      label: "Terminal",
-      icon: TerminalSquare,
-      key: "terminal",
-    },
-  ];
+  const { data: installedPlugins } = trpc.plugins.installed.useQuery(
+    undefined,
+    { enabled: isWorkspace },
+  );
 
-  const settingsItems = [
-    {
-      href: `${prefix}/settings`,
-      label: "Settings",
-      icon: Settings,
-      key: "settings",
-    },
-    {
-      href: `${prefix}/settings/members`,
-      label: "Members",
-      icon: Users,
-      key: "members",
-    },
-    {
-      href: `${prefix}/settings/api-keys`,
-      label: "API Keys",
-      icon: Key,
-      key: "api-keys",
-    },
-  ];
+  const pluginNavItems = (installedPlugins ?? [])
+    .filter((p) => p.status === "active" && p.manifest.sidebarItem)
+    .map((p) => {
+      const sb = p.manifest.sidebarItem!;
+      return {
+        href: `${prefix}${sb.path}`,
+        label: sb.label,
+        icon: SIDEBAR_ICON_MAP[sb.icon] ?? Puzzle,
+        key: `plugin-${p.pluginSlug}`,
+      };
+    });
 
   const toggleButton = (
     <button
@@ -217,7 +219,7 @@ export function AppSidebar({
         >
           {!collapsed && (
             <div className="flex flex-1 items-center gap-2 min-w-0">
-              {currentWorkspace ? (
+              {isWorkspace && currentWorkspace ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger className="flex items-center gap-2 min-w-0 rounded-lg p-1 -ml-1 hover:bg-accent transition-colors outline-none">
                     <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-semibold">
@@ -236,7 +238,12 @@ export function AppSidebar({
                     {workspacesList?.map((ws) => (
                       <DropdownMenuItem
                         key={ws.id}
-                        onSelect={() => router.push(`/w/${ws.slug}`)}
+                        onSelect={() => {
+                          if (ws.id !== currentWorkspace.id) {
+                            void utils.invalidate();
+                          }
+                          router.push(`/w/${ws.slug}`);
+                        }}
                         className={
                           ws.id === currentWorkspace.id ? "bg-accent" : ""
                         }
@@ -267,86 +274,236 @@ export function AppSidebar({
           {toggleButton}
         </div>
 
-        {/* Nav sections */}
+        {/* Nav sections — context-dependent */}
         <div className="flex flex-col gap-3">
-          <NavSection label="Files" collapsed={collapsed}>
-            {navItems.map((item) => {
-              const isActive =
-                item.key === "files"
-                  ? pathname === prefix ||
-                    pathname.startsWith(`${prefix}/folder`)
-                  : pathname.startsWith(item.href);
-              return (
-                <NavItem
-                  key={item.key}
-                  href={item.href}
-                  icon={item.icon}
-                  label={item.label}
-                  isActive={isActive}
-                  collapsed={collapsed}
-                />
-              );
-            })}
-          </NavSection>
-
-          <NavSection label="Workspace" collapsed={collapsed}>
-            {settingsItems.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <NavItem
-                  key={item.key}
-                  href={item.href}
-                  icon={item.icon}
-                  label={item.label}
-                  isActive={isActive}
-                  collapsed={collapsed}
-                />
-              );
-            })}
-          </NavSection>
+          {isWorkspace ? (
+            <WorkspaceNav
+              pathname={pathname}
+              prefix={prefix}
+              collapsed={collapsed}
+              pluginNavItems={pluginNavItems}
+            />
+          ) : (
+            <AccountNav
+              pathname={pathname}
+              collapsed={collapsed}
+              workspacesList={workspacesList ?? []}
+            />
+          )}
         </div>
       </div>
 
       {/* Bottom section */}
       <div className="flex flex-col gap-1">
-        {/* Storage usage card */}
-        {!collapsed && (
+        {/* Storage usage card — only in workspace context */}
+        {isWorkspace && !collapsed && (
           <div className="rounded-lg ring-1 ring-border shadow-sm p-2.5 mb-1">
             <StorageUsage />
           </div>
         )}
 
-        {/* Sign out */}
-        {collapsed ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={async () => {
-                  await signOut();
-                  router.push("/login");
-                }}
-                className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              >
-                <LogOut className="size-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8}>
-              Sign out
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <button
-            onClick={async () => {
-              await signOut();
-              router.push("/login");
-            }}
-            className="flex h-8 w-full items-center gap-2 rounded-lg p-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          >
-            <LogOut className="size-4 shrink-0" />
-            <span className="truncate">Sign out</span>
-          </button>
-        )}
+        {/* User menu */}
+        <UserMenu user={user} collapsed={collapsed} />
       </div>
     </div>
+  );
+}
+
+// ── Workspace nav (files, plugins, workspace settings) ───────────────────
+
+function WorkspaceNav({
+  pathname,
+  prefix,
+  collapsed,
+  pluginNavItems,
+}: {
+  pathname: string;
+  prefix: string;
+  collapsed: boolean;
+  pluginNavItems: {
+    href: string;
+    label: string;
+    icon: LucideIcon;
+    key: string;
+  }[];
+}) {
+  const navItems = [
+    { href: prefix, label: "My Files", icon: FolderOpen, key: "files" },
+    {
+      href: `${prefix}/shared-links`,
+      label: "Share Links",
+      icon: Share2,
+      key: "shares",
+    },
+    {
+      href: `${prefix}/upload-links`,
+      label: "Upload Links",
+      icon: Upload,
+      key: "uploads",
+    },
+    {
+      href: `${prefix}/tracked-links`,
+      label: "Tracked Links",
+      icon: BarChart3,
+      key: "tracked",
+    },
+    {
+      href: `${prefix}/terminal`,
+      label: "Terminal",
+      icon: TerminalSquare,
+      key: "terminal",
+    },
+  ];
+
+  const pluginSectionItems = [
+    ...pluginNavItems,
+    {
+      href: `${prefix}/plugins`,
+      label: "Plugins",
+      icon: Puzzle,
+      key: "plugins",
+    },
+  ];
+
+  const settingsItems = [
+    {
+      href: `${prefix}/settings`,
+      label: "Settings",
+      icon: Settings,
+      key: "settings",
+    },
+    {
+      href: `${prefix}/settings/members`,
+      label: "Members",
+      icon: Users,
+      key: "members",
+    },
+    {
+      href: `${prefix}/settings/api-keys`,
+      label: "API Keys",
+      icon: Key,
+      key: "api-keys",
+    },
+  ];
+
+  return (
+    <>
+      <NavSection label="Files" collapsed={collapsed}>
+        {navItems.map((item) => {
+          const isActive =
+            item.key === "files"
+              ? pathname === prefix ||
+                pathname.startsWith(`${prefix}/folder`)
+              : pathname.startsWith(item.href);
+          return (
+            <NavItem
+              key={item.key}
+              href={item.href}
+              icon={item.icon}
+              label={item.label}
+              isActive={isActive}
+              collapsed={collapsed}
+            />
+          );
+        })}
+      </NavSection>
+
+      <NavSection label="Plugins" collapsed={collapsed}>
+        {pluginSectionItems.map((item) => {
+          const isActive = pathname.startsWith(item.href);
+          return (
+            <NavItem
+              key={item.key}
+              href={item.href}
+              icon={item.icon}
+              label={item.label}
+              isActive={isActive}
+              collapsed={collapsed}
+            />
+          );
+        })}
+      </NavSection>
+
+      <NavSection label="Workspace" collapsed={collapsed}>
+        {settingsItems.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <NavItem
+              key={item.key}
+              href={item.href}
+              icon={item.icon}
+              label={item.label}
+              isActive={isActive}
+              collapsed={collapsed}
+            />
+          );
+        })}
+      </NavSection>
+    </>
+  );
+}
+
+// ── Account nav (settings + workspace picker) ────────────────────────────
+
+function AccountNav({
+  pathname,
+  collapsed,
+  workspacesList,
+}: {
+  pathname: string;
+  collapsed: boolean;
+  workspacesList: { id: string; name: string; slug: string; role: string }[];
+}) {
+  const accountItems = [
+    {
+      href: "/settings/account",
+      label: "Account",
+      icon: User,
+      key: "account",
+    },
+    {
+      href: "/settings/notifications",
+      label: "Notifications",
+      icon: Bell,
+      key: "notifications",
+    },
+  ];
+
+  return (
+    <>
+      <NavSection label="Settings" collapsed={collapsed}>
+        {accountItems.map((item) => (
+          <NavItem
+            key={item.key}
+            href={item.href}
+            icon={item.icon}
+            label={item.label}
+            isActive={pathname === item.href}
+            collapsed={collapsed}
+          />
+        ))}
+      </NavSection>
+
+      <NavSection label="Workspaces" collapsed={collapsed}>
+        {workspacesList.map((ws) => (
+          <NavItem
+            key={ws.id}
+            href={`/w/${ws.slug}`}
+            icon={Boxes}
+            label={ws.name}
+            isActive={false}
+            collapsed={collapsed}
+          />
+        ))}
+        <NavItem
+          key="new-workspace"
+          href="/onboarding"
+          icon={Plus}
+          label="New workspace"
+          isActive={false}
+          collapsed={collapsed}
+        />
+      </NavSection>
+    </>
   );
 }

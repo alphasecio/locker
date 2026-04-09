@@ -4,10 +4,12 @@ import { useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
+import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { trpc } from "@/lib/trpc/client";
 import dynamic from "next/dynamic";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 
 const GoogleAnalytics = dynamic(
   () =>
@@ -57,14 +59,23 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 
   return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider delayDuration={150}>
-          {children}
-          <Toaster position="bottom-right" />
-        </TooltipProvider>
-        <GoogleAnalytics />
-      </QueryClientProvider>
-    </trpc.Provider>
+    <NuqsAdapter>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+      >
+        <trpc.Provider client={trpcClient} queryClient={queryClient}>
+          <QueryClientProvider client={queryClient}>
+            <TooltipProvider delayDuration={150}>
+              {children}
+              <Toaster position="bottom-right" />
+            </TooltipProvider>
+            <GoogleAnalytics />
+          </QueryClientProvider>
+        </trpc.Provider>
+      </ThemeProvider>
+    </NuqsAdapter>
   );
 }
