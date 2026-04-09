@@ -1,2 +1,0 @@
-[deploy]
-preDeployCommand = "cd packages/database && npx drizzle-kit migrate"
