@@ -1,3 +1,4 @@
+import { createBashTools } from "./bash";
 import { createFileTools } from "./files";
 import { createFolderTools } from "./folders";
 import { createShareTools } from "./shares";
@@ -15,6 +16,7 @@ export type { AssistantToolContext } from "./types";
  */
 export function createAssistantTools(ctx: AssistantToolContext) {
   return {
+    ...createBashTools(ctx),
     ...createFileTools(ctx),
     ...createFolderTools(ctx),
     ...createShareTools(ctx),

@@ -13,6 +13,7 @@ import {
   Tag,
   Info,
   Plug,
+  Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FilePreviewCard, type FilePreviewData } from "./file-preview-card";
@@ -53,6 +54,7 @@ const TOOL_META: Record<string, { label: string; icon: React.ElementType }> = {
   getWorkspaceInfo: { label: "Retrieved workspace info", icon: Info },
   listMembers: { label: "Listed members", icon: Info },
   listPlugins: { label: "Listed plugins", icon: Plug },
+  bash: { label: "Running command", icon: Terminal },
 };
 
 /** Tools that surface a file as the primary deliverable (user asked for it). */
@@ -218,7 +220,33 @@ export function ToolInvocation({
     fileCards &&
     fileCards.length > 0;
 
-  const label = isComplete && resultSummary ? resultSummary : meta.label;
+  // Bash-specific state
+  const isBash = invocation.toolName === "bash";
+  const bashCommand = isBash
+    ? (invocation.args?.command as string) ??
+      (invocation.input?.command as string) ??
+      null
+    : null;
+  const bashResult = isBash && hasResult ? (toolOutput as Record<string, unknown>) : null;
+  const bashExitCode = bashResult?.exitCode as number | undefined;
+  const bashStdout = (bashResult?.stdout as string) ?? "";
+  const bashStderr = (bashResult?.stderr as string) ?? "";
+  const bashCwd = (bashResult?.cwd as string) ?? "";
+
+  // Build label
+  let label: string;
+  if (isBash && bashCommand) {
+    const firstLine = bashCommand.split("\n")[0]!;
+    const shortCmd =
+      firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine;
+    label = isComplete
+      ? bashExitCode === 0
+        ? `Ran \`${shortCmd}\``
+        : `\`${shortCmd}\` failed`
+      : `Running \`${shortCmd}\``;
+  } else {
+    label = isComplete && resultSummary ? resultSummary : meta.label;
+  }
 
   return (
     <div className="my-3">
@@ -228,7 +256,7 @@ export function ToolInvocation({
         className="group/tool flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         {isComplete ? (
-          hasError ? (
+          hasError || (isBash && bashExitCode !== 0) ? (
             <AlertCircle className="size-3.5 text-destructive shrink-0" />
           ) : (
             <CheckCircle2 className="size-3.5 text-primary/60 shrink-0" />
@@ -248,6 +276,31 @@ export function ToolInvocation({
       {/* Expanded details */}
       {expanded && (
         <div className="mt-2 ml-6 space-y-2">
+          {/* Bash terminal output */}
+          {isBash && (
+            <div className="rounded-lg bg-zinc-950 border border-zinc-800 overflow-hidden">
+              {bashCommand && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/50 border-b border-zinc-800 text-[11px] font-mono text-zinc-400">
+                  <span className="text-green-500">$</span>
+                  <span className="truncate">{bashCommand}</span>
+                </div>
+              )}
+              {(bashStdout || bashStderr) && (
+                <pre className="px-3 py-2 text-[11px] font-mono overflow-auto max-h-[400px] text-zinc-300 whitespace-pre-wrap break-all">
+                  {bashStdout}
+                  {bashStderr && (
+                    <span className="text-red-400">{bashStderr}</span>
+                  )}
+                </pre>
+              )}
+              {bashCwd && (
+                <div className="px-3 py-1 border-t border-zinc-800 text-[10px] font-mono text-zinc-500">
+                  cwd: {bashCwd}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Compact file list for search/list results */}
           {showCompactList && (
             <div className="space-y-0.5">
@@ -275,7 +328,7 @@ export function ToolInvocation({
 
           {/* Raw input/output (always available when expanded) */}
           <div className="space-y-2 text-xs">
-            {hasResult && !showCompactList && (
+            {hasResult && !showCompactList && !isBash && (
               <div>
                 <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                   Output
