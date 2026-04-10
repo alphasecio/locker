@@ -120,17 +120,22 @@ export async function POST(req: NextRequest) {
       })
       .onConflictDoNothing();
 
-    // Auto-title from first user message
+    // Auto-title from first user message (strip attachment metadata)
     if (!conversation.title) {
       const firstTextPart = (lastUserMessage.parts as any[])?.find(
         (p: any) => p.type === "text",
       );
       if (firstTextPart?.text) {
-        const title = firstTextPart.text.slice(0, 100);
-        await db
-          .update(assistantConversations)
-          .set({ title, updatedAt: new Date() })
-          .where(eq(assistantConversations.id, conversationId));
+        let rawTitle = firstTextPart.text;
+        const attachIdx = rawTitle.indexOf("\n\n[Attached files");
+        if (attachIdx !== -1) rawTitle = rawTitle.slice(0, attachIdx);
+        const title = rawTitle.trim().slice(0, 100);
+        if (title) {
+          await db
+            .update(assistantConversations)
+            .set({ title, updatedAt: new Date() })
+            .where(eq(assistantConversations.id, conversationId));
+        }
       }
     }
   }

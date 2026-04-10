@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, type ComponentPropsWithoutRef } from "react";
-import { Copy, Check, WrapText } from "lucide-react";
+import { useState, useCallback, useMemo, type ComponentPropsWithoutRef } from "react";
+import { Copy, Check, WrapText, Paperclip } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
@@ -208,14 +208,47 @@ export function ChatMessage({
     setTimeout(() => setCopied(false), 2000);
   }, [fullText]);
 
+  // Parse attachment metadata from user messages
+  const { displayText, attachedFiles } = useMemo(() => {
+    const attachmentMarker = "\n\n[Attached files uploaded to workspace root]";
+    const idx = fullText.indexOf(attachmentMarker);
+    if (idx === -1) return { displayText: fullText, attachedFiles: [] };
+
+    const userText = fullText.slice(0, idx);
+    const attachmentBlock = fullText.slice(idx + attachmentMarker.length);
+    const files = attachmentBlock
+      .split("\n")
+      .filter((line) => line.startsWith("- "))
+      .map((line) => {
+        const nameMatch = line.match(/"([^"]+)"/);
+        return nameMatch?.[1] ?? line.replace(/^- /, "").trim();
+      });
+
+    return { displayText: userText, attachedFiles: files };
+  }, [fullText]);
+
   // User message — right-aligned bubble
   if (isUser) {
     return (
       <div className="flex justify-end px-4 md:px-6 py-4">
         <div className="max-w-[85%] md:max-w-[70%]">
+          {/* File attachment chips */}
+          {attachedFiles.length > 0 && (
+            <div className="flex flex-wrap justify-end gap-1.5 mb-2">
+              {attachedFiles.map((name, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1 text-xs text-muted-foreground shadow-sm"
+                >
+                  <Paperclip className="size-3 shrink-0" />
+                  <span className="truncate max-w-[180px]">{name}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="rounded-2xl rounded-br-md bg-foreground/[0.07] px-4 py-3">
             <p className="text-[15px] leading-[1.65] text-foreground whitespace-pre-wrap">
-              {fullText}
+              {displayText}
             </p>
           </div>
         </div>

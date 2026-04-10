@@ -70,7 +70,7 @@ export function FilePreviewPanel({ fileId, workspaceSlug, onClose }: FilePreview
   }, [file, workspaceSlug]);
 
   return (
-    <div className="flex h-full flex-col border-l bg-background">
+    <div className="flex h-full flex-col overflow-hidden border-l bg-background">
       {/* Header */}
       <div className="flex h-12 items-center gap-2 border-b px-4">
         <div className="flex-1 min-w-0 flex items-center gap-2">

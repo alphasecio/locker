@@ -8,7 +8,7 @@ import { trpc } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { uploadFile } from "@/lib/upload";
 
 import { ConversationSidebar } from "./conversation-sidebar";
 import { ChatMessage, StreamingIndicator } from "./chat-message";
@@ -70,6 +70,10 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
     onSuccess: () => utils.assistant.conversations.invalidate(),
     onError: (error) => toast.error(error.message),
   });
+
+  // Upload mutations for file attachments
+  const uploadInitiate = trpc.uploads.initiate.useMutation();
+  const uploadComplete = trpc.uploads.complete.useMutation();
 
   // --- Reconstruct messages from DB ---
   const initialMessages: UIMessage[] = useMemo(() => {
@@ -139,38 +143,75 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
     createConversationMutation.mutate({});
   }, [createConversationMutation]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     if (!inputValue.trim() && attachments.length === 0) return;
 
-    // Auto-create conversation if none exists
+    const currentText = inputValue;
+    const currentAttachments = [...attachments];
+    setInputValue("");
+    setAttachments([]);
+
+    // Upload any attached files first
+    let uploadedFiles: { id: string; name: string }[] = [];
+    if (currentAttachments.length > 0) {
+      try {
+        const results = await Promise.all(
+          currentAttachments.map(async (att) => {
+            const fileId = await uploadFile({
+              file: att.file,
+              folderId: null,
+              workspaceSlug,
+              uploads: {
+                initiate: uploadInitiate,
+                complete: uploadComplete,
+                abort: { mutateAsync: async () => {} },
+              },
+            });
+            return { id: fileId, name: att.file.name };
+          }),
+        );
+        uploadedFiles = results;
+      } catch (err) {
+        toast.error("Failed to upload attachments");
+        return;
+      }
+    }
+
+    // Build the message text — include uploaded file references so the model
+    // knows which files the user is referring to and can operate on them.
+    let messageText = currentText;
+    if (uploadedFiles.length > 0) {
+      const fileList = uploadedFiles
+        .map((f) => `- "${f.name}" (id: ${f.id})`)
+        .join("\n");
+      messageText = `${currentText}\n\n[Attached files uploaded to workspace root]\n${fileList}`;
+    }
+
+    // Ensure we have a conversation
     if (!conversationId) {
       createConversationMutation.mutate(
         {},
         {
           onSuccess: (conv) => {
             setConversationId(conv.id);
-            // We need to wait for transport body to update before sending.
-            // The ref update happens synchronously in render, so we can
-            // use a microtask to ensure it's updated.
             transportBody.current.conversationId = conv.id;
-            sendMessage({ text: inputValue });
-            setInputValue("");
-            setAttachments([]);
+            sendMessage({ text: messageText });
           },
         },
       );
       return;
     }
 
-    sendMessage({ text: inputValue });
-    setInputValue("");
-    setAttachments([]);
+    sendMessage({ text: messageText });
   }, [
     inputValue,
     attachments,
     conversationId,
+    workspaceSlug,
     createConversationMutation,
     sendMessage,
+    uploadInitiate,
+    uploadComplete,
   ]);
 
   const handleSuggestionClick = useCallback(
@@ -223,10 +264,10 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
   }, [conversations, conversationId]);
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full overflow-hidden">
       {/* Conversation sidebar */}
       {sidebarOpen && (
-        <div className="w-[260px] shrink-0">
+        <div className="w-[260px] shrink-0 overflow-hidden">
           <ConversationSidebar
             conversations={conversations.map((c) => ({
               ...c,
@@ -247,9 +288,9 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
       )}
 
       {/* Main chat area */}
-      <div className="flex flex-1 flex-col min-w-0">
+      <div className="flex flex-1 flex-col w-0 overflow-hidden">
         {/* Top bar */}
-        <div className="flex h-12 items-center gap-2 px-3 border-b bg-background">
+        <div className="flex h-12 items-center gap-2 px-3 border-b bg-background min-w-0">
           <Button
             size="sm"
             variant="ghost"

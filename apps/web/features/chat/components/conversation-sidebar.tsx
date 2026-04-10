@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, MessageSquare, Trash2, MoreHorizontal, Pencil } from "lucide-react";
+import {
+  Plus,
+  MessageSquare,
+  Trash2,
+  MoreHorizontal,
+  Pencil,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -54,7 +60,7 @@ export function ConversationSidebar({
   };
 
   return (
-    <div className="flex h-full flex-col border-r bg-background">
+    <div className="flex h-full flex-col overflow-hidden border-r bg-background">
       {/* Header */}
       <div className="flex h-12 items-center justify-between px-3 border-b">
         <h2 className="text-sm font-semibold text-foreground">Chats</h2>
@@ -70,12 +76,14 @@ export function ConversationSidebar({
       </div>
 
       {/* Conversation list */}
-      <ScrollArea className="flex-1">
-        <div className="p-1.5 space-y-0.5">
+      <div className="flex-1 w-full overflow-y-auto">
+        <div className="p-1.5 space-y-0.5 overflow-hidden">
           {conversations.length === 0 && (
             <div className="px-3 py-8 text-center">
               <MessageSquare className="size-5 text-muted-foreground mx-auto mb-2" />
-              <p className="text-xs text-muted-foreground">No conversations yet</p>
+              <p className="text-xs text-muted-foreground">
+                No conversations yet
+              </p>
             </div>
           )}
 
@@ -83,7 +91,7 @@ export function ConversationSidebar({
             <div
               key={conv.id}
               className={cn(
-                "group/item flex items-center gap-1 rounded-lg px-2.5 py-2 cursor-pointer transition-colors",
+                "group/item flex items-center gap-1 rounded-lg px-2.5 py-2 cursor-pointer transition-colors overflow-hidden",
                 conv.id === activeId
                   ? "bg-accent text-accent-foreground"
                   : "hover:bg-muted/50 text-foreground",
@@ -148,7 +156,7 @@ export function ConversationSidebar({
             </div>
           ))}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }
