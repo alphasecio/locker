@@ -91,7 +91,7 @@ export function createFileTools(ctx: AssistantToolContext) {
               .where(
                 and(
                   eq(fileTranscriptions.workspaceId, ctx.workspaceId),
-                  eq(fileTranscriptions.status, "completed"),
+                  eq(fileTranscriptions.status, "ready"),
                   or(
                     ...words.map((w) =>
                       ilike(
