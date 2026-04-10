@@ -3,10 +3,15 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { PanelLeftClose, PanelLeft } from "lucide-react";
+import { PanelLeftClose, PanelLeft, PanelRightClose } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 import { toast } from "sonner";
 import { uploadFile } from "@/lib/upload";
 
@@ -288,9 +293,9 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Conversation sidebar */}
+      {/* Conversation sidebar — fixed width, outside resizable group */}
       {sidebarOpen && (
-        <div className="w-[260px] shrink-0 overflow-hidden">
+        <div className="w-65 shrink-0 overflow-hidden">
           <ConversationSidebar
             conversations={conversations.map((c) => ({
               ...c,
@@ -310,90 +315,115 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
         </div>
       )}
 
-      {/* Main chat area */}
-      <div className="flex flex-1 flex-col w-0 overflow-hidden">
-        {/* Top bar */}
-        <div className="flex h-12 items-center gap-2 px-3 border-b bg-background min-w-0">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="size-8 p-0"
+      {/* Main area — resizable between chat and file preview panel */}
+      <div className="flex-1 min-w-0 h-full">
+        <ResizablePanelGroup orientation="horizontal">
+          {/* Chat panel */}
+          <ResizablePanel
+            defaultSize={previewFileId ? 60 : 100}
+            minSize={40}
           >
-            {sidebarOpen ? (
-              <PanelLeftClose className="size-4" />
-            ) : (
-              <PanelLeft className="size-4" />
-            )}
-          </Button>
+            <div className="flex h-full flex-col overflow-hidden">
+              {/* Top bar */}
+              <div className="flex h-12 items-center gap-2 px-3 border-b bg-background min-w-0">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="size-8 p-0"
+                >
+                  {sidebarOpen ? (
+                    <PanelLeftClose className="size-4" />
+                  ) : (
+                    <PanelLeft className="size-4" />
+                  )}
+                </Button>
 
-          <h1 className="text-sm font-medium text-foreground truncate">
-            {conversationData?.title ?? "New conversation"}
-          </h1>
-        </div>
+                <h1 className="text-sm font-medium text-foreground truncate flex-1">
+                  {conversationData?.title ?? "New conversation"}
+                </h1>
 
-        {/* Messages or empty state */}
-        {messages.length === 0 && !pendingMessage && !isStreaming ? (
-          <EmptyState onSuggestionClick={handleSuggestionClick} />
-        ) : (
-          <ScrollArea className="flex-1 mb-[-20px]">
-            <div className="max-w-3xl mx-auto w-full">
-              {messages.map((message: UIMessage) => (
-                <ChatMessage
-                  key={message.id}
-                  role={message.role}
-                  parts={
-                    message.parts as Array<{
-                      type: string;
-                      text?: string;
-                      [key: string]: unknown;
-                    }>
-                  }
-                  onFileClick={setPreviewFileId}
-                />
-              ))}
-              {pendingMessage && (
-                <ChatMessage
-                  key="pending"
-                  role="user"
-                  parts={[{ type: "text", text: pendingMessage.text }]}
-                />
-              )}
-              {(isStreaming || pendingMessage) &&
-                messages[messages.length - 1]?.role !== "assistant" && (
-                  <StreamingIndicator />
+                {previewFileId && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPreviewFileId(null)}
+                    className="size-8 p-0"
+                    title="Close preview"
+                  >
+                    <PanelRightClose className="size-4" />
+                  </Button>
                 )}
+              </div>
+
+              {/* Messages or empty state */}
+              {messages.length === 0 && !pendingMessage && !isStreaming ? (
+                <EmptyState onSuggestionClick={handleSuggestionClick} />
+              ) : (
+                <ScrollArea className="flex-1 -mb-5">
+                  <div className="max-w-3xl mx-auto w-full">
+                    {messages.map((message: UIMessage) => (
+                      <ChatMessage
+                        key={message.id}
+                        role={message.role}
+                        parts={
+                          message.parts as Array<{
+                            type: string;
+                            text?: string;
+                            [key: string]: unknown;
+                          }>
+                        }
+                        onFileClick={setPreviewFileId}
+                      />
+                    ))}
+                    {pendingMessage && (
+                      <ChatMessage
+                        key="pending"
+                        role="user"
+                        parts={[{ type: "text", text: pendingMessage.text }]}
+                      />
+                    )}
+                    {(isStreaming || pendingMessage) &&
+                      messages[messages.length - 1]?.role !== "assistant" && (
+                        <StreamingIndicator />
+                      )}
+                  </div>
+                  <div ref={scrollRef} />
+                </ScrollArea>
+              )}
+
+              {/* Input */}
+              <ChatInput
+                className="z-20 relative"
+                value={inputValue}
+                onChange={setInputValue}
+                onSubmit={handleSend}
+                model={selectedModel}
+                onModelChange={setSelectedModel}
+                disabled={false}
+                isSending={isStreaming}
+                attachments={attachments}
+                onAttach={handleAttach}
+                onRemoveAttachment={handleRemoveAttachment}
+              />
             </div>
-            <div ref={scrollRef} />
-          </ScrollArea>
-        )}
+          </ResizablePanel>
 
-        {/* Input */}
-        <ChatInput
-          className="z-20 relative"
-          value={inputValue}
-          onChange={setInputValue}
-          onSubmit={handleSend}
-          model={selectedModel}
-          onModelChange={setSelectedModel}
-          disabled={false}
-          isSending={isStreaming}
-          attachments={attachments}
-          onAttach={handleAttach}
-          onRemoveAttachment={handleRemoveAttachment}
-        />
+          {/* File preview side panel */}
+          {previewFileId && (
+            <>
+              <ResizableHandle />
+              <ResizablePanel defaultSize={40} minSize={20}>
+                <FilePreviewPanel
+                  fileId={previewFileId}
+                  workspaceSlug={workspaceSlug}
+                  onClose={() => setPreviewFileId(null)}
+                />
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
       </div>
-
-      {/* File preview side panel */}
-      {previewFileId && (
-        <div className="w-[480px] shrink-0">
-          <FilePreviewPanel
-            fileId={previewFileId}
-            workspaceSlug={workspaceSlug}
-            onClose={() => setPreviewFileId(null)}
-          />
-        </div>
-      )}
     </div>
   );
 }
