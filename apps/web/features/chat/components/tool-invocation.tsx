@@ -40,7 +40,8 @@ const TOOL_META: Record<string, { label: string; icon: React.ElementType }> = {
   renameFolder: { label: "Renamed folder", icon: FolderPlus },
   moveFolder: { label: "Moved folder", icon: FolderPlus },
   deleteFolder: { label: "Deleted folder", icon: AlertCircle },
-  createShareLink: { label: "Created share link", icon: Link },
+  shareFile: { label: "Created share link", icon: Link },
+  shareFolder: { label: "Created share link", icon: Link },
   listShareLinks: { label: "Listed share links", icon: Link },
   revokeShareLink: { label: "Revoked share link", icon: Link },
   listTags: { label: "Listed tags", icon: Tag },
@@ -66,7 +67,8 @@ function formatToolResult(toolName: string, result: unknown): string | null {
       const folder = r.folder as any;
       return folder ? `Created folder "${folder.name}"` : null;
     }
-    case "createShareLink":
+    case "shareFile":
+    case "shareFolder":
       return r.shareUrl ? `Share link: ${r.shareUrl}` : null;
     case "searchFiles":
     case "listFiles": {

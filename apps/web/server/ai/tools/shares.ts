@@ -7,20 +7,133 @@ import { hashLinkPassword } from "../../security/password";
 import type { AssistantToolContext } from "./types";
 
 export function createShareTools(ctx: AssistantToolContext) {
+  /** Strip placeholder / junk values that LLMs sometimes hallucinate. */
+  function sanitizeOpts(opts: {
+    password?: string;
+    expiresAt?: string;
+    maxDownloads?: number;
+  }) {
+    // Treat non-alphanumeric-only strings (e.g. "/", "-", "none") as no password
+    const password =
+      opts.password && /[a-zA-Z0-9]/.test(opts.password)
+        ? opts.password
+        : undefined;
+
+    // Must be a parseable future date
+    const parsed = opts.expiresAt ? new Date(opts.expiresAt) : null;
+    const expiresAt =
+      parsed && !isNaN(parsed.getTime()) && parsed > new Date()
+        ? opts.expiresAt
+        : undefined;
+
+    // Cap at a reasonable ceiling; discard absurd values like MAX_SAFE_INTEGER
+    const MAX_REASONABLE_DOWNLOADS = 10_000;
+    const maxDownloads =
+      opts.maxDownloads &&
+      opts.maxDownloads > 0 &&
+      opts.maxDownloads <= MAX_REASONABLE_DOWNLOADS
+        ? opts.maxDownloads
+        : undefined;
+
+    return { password, expiresAt, maxDownloads };
+  }
+
+  async function createLink(opts: {
+    fileId: string | null;
+    folderId: string | null;
+    access: "view" | "download";
+    password?: string;
+    expiresAt?: string;
+    maxDownloads?: number;
+  }) {
+    const { password, expiresAt, maxDownloads } = sanitizeOpts(opts);
+
+    const token = randomBytes(32).toString("base64url");
+    const hasPassword = !!password;
+    const passwordHash = password ? hashLinkPassword(password) : null;
+
+    const [link] = await ctx.db
+      .insert(shareLinks)
+      .values({
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        fileId: opts.fileId,
+        folderId: opts.folderId,
+        token,
+        access: opts.access,
+        hasPassword,
+        passwordHash,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        maxDownloads: maxDownloads ?? null,
+      })
+      .returning();
+
+    const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}/shared/${token}`;
+    return { shareLink: link, shareUrl };
+  }
+
   return {
-    createShareLink: tool({
+    shareFile: tool({
       description:
-        "Create a share link for a file or folder. Returns the public URL. Exactly one of fileId or folderId must be provided.",
+        "Create a share link for a file. Returns the public URL. Use shareFolder instead if sharing a folder. Do not add a password, expiration, or download limit unless the user explicitly asks for one.",
       inputSchema: z.object({
         fileId: z
           .string()
           .uuid()
-          .optional()
           .describe("ID of the file to share"),
+        access: z
+          .enum(["view", "download"])
+          .default("view")
+          .describe("Access level for the share link"),
+        password: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Optional password to protect the link"),
+        expiresAt: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Optional ISO date string for link expiration"),
+        maxDownloads: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Optional maximum number of downloads"),
+      }),
+      execute: async ({ fileId, access, password, expiresAt, maxDownloads }) => {
+        const [file] = await ctx.db
+          .select({ id: files.id })
+          .from(files)
+          .where(
+            and(
+              eq(files.id, fileId),
+              eq(files.workspaceId, ctx.workspaceId),
+            ),
+          )
+          .limit(1);
+
+        if (!file) return { error: "File not found" };
+
+        return createLink({
+          fileId,
+          folderId: null,
+          access,
+          password,
+          expiresAt,
+          maxDownloads,
+        });
+      },
+    }),
+
+    shareFolder: tool({
+      description:
+        "Create a share link for a folder. Returns the public URL. Use shareFile instead if sharing a file. Do not add a password, expiration, or download limit unless the user explicitly asks for one.",
+      inputSchema: z.object({
         folderId: z
           .string()
           .uuid()
-          .optional()
           .describe("ID of the folder to share"),
         access: z
           .enum(["view", "download"])
@@ -28,10 +141,12 @@ export function createShareTools(ctx: AssistantToolContext) {
           .describe("Access level for the share link"),
         password: z
           .string()
+          .min(1)
           .optional()
           .describe("Optional password to protect the link"),
         expiresAt: z
           .string()
+          .min(1)
           .optional()
           .describe("Optional ISO date string for link expiration"),
         maxDownloads: z
@@ -42,69 +157,33 @@ export function createShareTools(ctx: AssistantToolContext) {
           .describe("Optional maximum number of downloads"),
       }),
       execute: async ({
-        fileId,
         folderId,
         access,
         password,
         expiresAt,
         maxDownloads,
       }) => {
-        if (!fileId && !folderId) {
-          return { error: "Either fileId or folderId is required" };
-        }
+        const [folder] = await ctx.db
+          .select({ id: folders.id })
+          .from(folders)
+          .where(
+            and(
+              eq(folders.id, folderId),
+              eq(folders.workspaceId, ctx.workspaceId),
+            ),
+          )
+          .limit(1);
 
-        if (fileId) {
-          const [file] = await ctx.db
-            .select({ id: files.id })
-            .from(files)
-            .where(
-              and(
-                eq(files.id, fileId),
-                eq(files.workspaceId, ctx.workspaceId),
-              ),
-            )
-            .limit(1);
+        if (!folder) return { error: "Folder not found" };
 
-          if (!file) return { error: "File not found" };
-        }
-
-        if (folderId) {
-          const [folder] = await ctx.db
-            .select({ id: folders.id })
-            .from(folders)
-            .where(
-              and(
-                eq(folders.id, folderId),
-                eq(folders.workspaceId, ctx.workspaceId),
-              ),
-            )
-            .limit(1);
-
-          if (!folder) return { error: "Folder not found" };
-        }
-
-        const token = randomBytes(32).toString("base64url");
-        const hasPassword = !!password;
-        const passwordHash = password ? hashLinkPassword(password) : null;
-
-        const [link] = await ctx.db
-          .insert(shareLinks)
-          .values({
-            userId: ctx.userId,
-            workspaceId: ctx.workspaceId,
-            fileId: fileId ?? null,
-            folderId: folderId ?? null,
-            token,
-            access,
-            hasPassword,
-            passwordHash,
-            expiresAt: expiresAt ? new Date(expiresAt) : null,
-            maxDownloads: maxDownloads ?? null,
-          })
-          .returning();
-
-        const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}/shared/${token}`;
-        return { shareLink: link, shareUrl };
+        return createLink({
+          fileId: null,
+          folderId,
+          access,
+          password,
+          expiresAt,
+          maxDownloads,
+        });
       },
     }),
 
