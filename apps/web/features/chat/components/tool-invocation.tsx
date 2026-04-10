@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FilePreviewCard, type FilePreviewData } from "./file-preview-card";
+import { ShareLinkCard, type ShareLinkData } from "./share-link-card";
 
 interface ToolInvocationData {
   toolCallId: string;
@@ -69,7 +70,7 @@ function formatToolResult(toolName: string, result: unknown): string | null {
     }
     case "shareFile":
     case "shareFolder":
-      return r.shareUrl ? `Share link: ${r.shareUrl}` : null;
+      return r.shareUrl ? "Created share link" : null;
     case "searchFiles":
     case "listFiles": {
       const files = r.files as any[];
@@ -153,6 +154,26 @@ function extractFiles(
   return null;
 }
 
+/** Extract share link data from shareFile/shareFolder results. */
+function extractShareLink(
+  toolName: string,
+  result: unknown,
+): ShareLinkData | null {
+  if (toolName !== "shareFile" && toolName !== "shareFolder") return null;
+  if (!result || typeof result !== "object") return null;
+  const r = result as Record<string, unknown>;
+  if (!r.shareUrl || typeof r.shareUrl !== "string") return null;
+
+  const link = (r.shareLink ?? {}) as Record<string, unknown>;
+  return {
+    shareUrl: r.shareUrl,
+    access: (link.access as "view" | "download") ?? "view",
+    hasPassword: (link.hasPassword as boolean) ?? false,
+    expiresAt: (link.expiresAt as string) ?? null,
+    maxDownloads: (link.maxDownloads as number) ?? null,
+  };
+}
+
 export function ToolInvocation({
   invocation,
   onFileClick,
@@ -180,6 +201,11 @@ export function ToolInvocation({
   // Extract file preview cards from results
   const fileCards = hasResult
     ? extractFiles(invocation.toolName, toolOutput)
+    : null;
+
+  // Extract share link card from results
+  const shareLinkData = hasResult
+    ? extractShareLink(invocation.toolName, toolOutput)
     : null;
 
   // Determine if there's expandable content (input or output data)
@@ -241,6 +267,13 @@ export function ToolInvocation({
               onClick={() => onFileClick?.(file.id)}
             />
           ))}
+        </div>
+      )}
+
+      {/* Share link card — shown inline when shareFile/shareFolder succeeds */}
+      {shareLinkData && (
+        <div className="mt-3">
+          <ShareLinkCard link={shareLinkData} />
         </div>
       )}
 
