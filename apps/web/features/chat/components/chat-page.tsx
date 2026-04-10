@@ -111,12 +111,17 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
     },
   });
 
-  // Reset messages when conversation changes — scoped to conversationId only
-  // to avoid clobbering in-flight streamed messages on background refetches.
+  // Reset messages only when the query has loaded data for a different conversation.
+  // Using conversationData?.id as the trigger avoids two problems:
+  //  1) Wiping optimistic messages when conversationId changes before the query loads
+  //  2) Clobbering in-flight streamed messages on background refetches
+  const loadedConversationId = conversationData?.id;
   useEffect(() => {
-    setMessages(initialMessages);
+    if (loadedConversationId === conversationId) {
+      setMessages(initialMessages);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId]);
+  }, [loadedConversationId]);
 
   // --- Auto-scroll ---
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -262,13 +267,11 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
         </div>
 
         {/* Messages or empty state */}
-        {!conversationId && messages.length === 0 ? (
-          <EmptyState onSuggestionClick={handleSuggestionClick} />
-        ) : messages.length === 0 ? (
+        {messages.length === 0 && !isStreaming ? (
           <EmptyState onSuggestionClick={handleSuggestionClick} />
         ) : (
           <ScrollArea className="flex-1">
-            <div className="divide-y divide-border/40">
+            <div>
               {messages.map((message: UIMessage) => (
                 <ChatMessage
                   key={message.id}

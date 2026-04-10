@@ -132,7 +132,7 @@ test.describe.serial("AI Assistant chat flows", () => {
     await page.waitForTimeout(1000);
 
     // Textarea
-    const textarea = page.getByPlaceholder("Ask Locker anything...");
+    const textarea = page.getByPlaceholder("Reply...");
     await expect(textarea).toBeVisible({ timeout: 5000 });
 
     // Model selector showing GPT-4o (default)
@@ -140,10 +140,10 @@ test.describe.serial("AI Assistant chat flows", () => {
       timeout: 5000,
     });
 
-    // Keyboard hint
-    await expect(
-      page.getByText("Enter to send").first(),
-    ).toBeVisible({ timeout: 5000 });
+    // Model selector in the bottom toolbar
+    await expect(page.getByText("GPT-4o").first()).toBeVisible({
+      timeout: 5000,
+    });
 
     await page.screenshot({
       path: "e2e/screenshots/ai-chat-06-input-elements.png",
@@ -238,7 +238,7 @@ test.describe.serial("AI Assistant chat flows", () => {
     await page.waitForTimeout(2000);
 
     // Type a message in the textarea
-    const textarea = page.getByPlaceholder("Ask Locker anything...");
+    const textarea = page.getByPlaceholder("Reply...");
     await textarea.fill("Hello, this is a test message!");
 
     // Send with Enter key
@@ -250,10 +250,10 @@ test.describe.serial("AI Assistant chat flows", () => {
       page.getByText("Hello, this is a test message!").first(),
     ).toBeVisible({ timeout: 10000 });
 
-    // The "You" label should appear for the user message
-    await expect(page.getByText("You").first()).toBeVisible({
-      timeout: 5000,
-    });
+    // The user message should be in a bubble (right-aligned)
+    await expect(
+      page.locator("div.rounded-2xl", { hasText: "Hello, this is a test message!" }),
+    ).toBeVisible({ timeout: 5000 });
 
     await page.screenshot({
       path: "e2e/screenshots/ai-chat-10-message-sent.png",

@@ -5,7 +5,7 @@ import {
   ArrowUp,
   Square,
   ChevronDown,
-  Sparkles,
+  Plus,
   Paperclip,
   X,
 } from "lucide-react";
@@ -66,7 +66,7 @@ export function ChatInput({
   onModelChange,
   disabled = false,
   isSending = false,
-  placeholder = "Ask Locker anything...",
+  placeholder = "Reply...",
   attachments = [],
   onAttach,
   onRemoveAttachment,
@@ -74,7 +74,8 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = useState(false);
-  const canSubmit = (value.trim().length > 0 || attachments.length > 0) && !disabled;
+  const canSubmit =
+    (value.trim().length > 0 || attachments.length > 0) && !disabled;
 
   useEffect(() => {
     if (!disabled) textareaRef.current?.focus();
@@ -131,7 +132,7 @@ export function ChatInput({
     AVAILABLE_MODELS.find((m) => m.id === model) ?? AVAILABLE_MODELS[0];
 
   return (
-    <div className="border-t bg-background px-4 py-3">
+    <div className="px-4 pb-4 pt-2">
       <form
         onSubmit={handleSubmit}
         onDrop={handleDrop}
@@ -144,7 +145,7 @@ export function ChatInput({
             {attachments.map((att, idx) => (
               <div
                 key={idx}
-                className="group/att relative flex items-center gap-1.5 rounded-lg border bg-muted/50 px-2.5 py-1.5 text-xs"
+                className="flex items-center gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-sm"
               >
                 {att.preview ? (
                   <img
@@ -161,7 +162,7 @@ export function ChatInput({
                 <button
                   type="button"
                   onClick={() => onRemoveAttachment?.(idx)}
-                  className="ml-0.5 flex size-4 items-center justify-center rounded-full bg-muted-foreground/20 text-muted-foreground hover:bg-destructive/20 hover:text-destructive transition-colors"
+                  className="ml-0.5 flex size-4 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                 >
                   <X className="size-2.5" />
                 </button>
@@ -170,113 +171,116 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Main input container */}
+        {/* Input container */}
         <div
           className={cn(
-            "flex items-end gap-2 rounded-xl border bg-muted/30 px-3 py-2.5 transition-all",
-            isFocused
-              ? "border-primary/40 ring-2 ring-primary/10"
-              : "border-border",
+            "rounded-2xl border bg-background shadow-sm transition-all",
+            isFocused ? "border-border shadow-md" : "border-border/60",
             disabled && "opacity-50",
           )}
         >
-          {/* Attach button */}
-          {onAttach && (
-            <>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={disabled}
-                className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors pb-0.5"
-                title="Attach files"
-              >
-                <Paperclip className="size-4" />
-              </button>
-            </>
-          )}
+          {/* Textarea row */}
+          <div className="flex items-end gap-1 px-4 py-3">
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              placeholder={placeholder}
+              disabled={disabled}
+              rows={1}
+              className="max-h-[200px] min-h-[24px] flex-1 resize-none bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+              style={{ boxShadow: "none" }}
+            />
 
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={handleInput}
-            onKeyDown={handleKeyDown}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            placeholder={placeholder}
-            disabled={disabled}
-            rows={1}
-            className="max-h-[200px] min-h-[32px] pt-1 flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-            style={{ boxShadow: "none" }}
-          />
-
-          {/* Send / Stop button */}
-          <div className="flex items-center gap-1 pb-0.5">
-            {isSending ? (
-              <button
-                type="button"
-                className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
-                title="Generating..."
-              >
-                <Square className="size-3" fill="currentColor" />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className={cn(
-                  "flex size-8 shrink-0 items-center justify-center rounded-lg transition-all active:scale-95",
-                  canSubmit
-                    ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                    : "bg-muted text-muted-foreground",
-                )}
-              >
-                <ArrowUp className="size-4" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Footer: model selector + keyboard hints */}
-        <div className="mt-2 flex items-center justify-between">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              >
-                <Sparkles className="size-3" />
-                <span>{selectedModel.label}</span>
-                <ChevronDown className="size-3" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              {AVAILABLE_MODELS.map((m) => (
-                <DropdownMenuItem
-                  key={m.id}
-                  onSelect={() => onModelChange(m.id)}
-                  className={cn(m.id === model && "bg-accent")}
+            {/* Send indicator — small dot when ready, square when streaming */}
+            <div className="flex items-center pb-0.5">
+              {isSending ? (
+                <button
+                  type="button"
+                  className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted transition-colors"
+                  title="Stop generating"
                 >
-                  <div className="flex flex-col">
-                    <span className="text-sm">{m.label}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {m.provider}
-                    </span>
-                  </div>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <Square className="size-3" fill="currentColor" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!canSubmit}
+                  className={cn(
+                    "flex size-7 shrink-0 items-center justify-center rounded-full transition-all",
+                    canSubmit
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95"
+                      : "text-muted-foreground/30",
+                  )}
+                >
+                  {canSubmit ? (
+                    <ArrowUp className="size-3.5" />
+                  ) : (
+                    <div className="size-2 rounded-full bg-primary" />
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
 
-          <span className="text-[10px] text-muted-foreground">
-            Enter to send &middot; Shift+Enter for newline
-          </span>
+          {/* Bottom toolbar */}
+          <div className="flex items-center justify-between border-t border-border/30 px-3 py-1.5">
+            {/* Left: attach */}
+            <div className="flex items-center gap-0.5">
+              {onAttach && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={disabled}
+                    className="flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                    title="Attach files"
+                  >
+                    <Plus className="size-4" />
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Right: model selector */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 rounded-md px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <span>{selectedModel.label}</span>
+                  <ChevronDown className="size-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                {AVAILABLE_MODELS.map((m) => (
+                  <DropdownMenuItem
+                    key={m.id}
+                    onSelect={() => onModelChange(m.id)}
+                    className={cn(m.id === model && "bg-accent")}
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-sm">{m.label}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {m.provider}
+                      </span>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </form>
     </div>

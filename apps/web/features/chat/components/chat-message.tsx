@@ -32,7 +32,7 @@ function CodeBlock({
   if (!language && !code.includes("\n")) {
     return (
       <code
-        className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-foreground border border-border"
+        className="rounded-md bg-muted/80 px-1.5 py-0.5 font-mono text-[0.85em] text-foreground"
         {...props}
       >
         {children}
@@ -42,16 +42,16 @@ function CodeBlock({
 
   // Fenced code block
   return (
-    <div className="group/code relative my-3 overflow-hidden rounded-lg border border-border bg-[hsl(var(--foreground))]">
-      <div className="flex items-center justify-between bg-muted/80 px-3 py-1.5">
-        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+    <div className="group/code relative my-4 overflow-hidden rounded-xl border border-border/50 bg-[hsl(var(--foreground))]">
+      <div className="flex items-center justify-between bg-muted/60 px-4 py-2">
+        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
           {language || "code"}
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => setWrap((w) => !w)}
             className={cn(
-              "flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors",
+              "flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors",
               wrap && "text-primary",
             )}
           >
@@ -59,7 +59,7 @@ function CodeBlock({
           </button>
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors"
           >
             {copied ? (
               <>
@@ -90,46 +90,48 @@ function CodeBlock({
 }
 
 // ---------------------------------------------------------------------------
-// Markdown renderer
+// Markdown renderer — editorial, generous typography
 // ---------------------------------------------------------------------------
 
 function MarkdownContent({ content }: { content: string }) {
   return (
-    <div className="text-sm leading-[1.7] text-foreground">
+    <div className="text-[15px] leading-[1.75] text-foreground">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         urlTransform={(url) => url}
         components={{
           code: CodeBlock,
-          p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+          p: ({ children }) => (
+            <p className="mb-4 last:mb-0">{children}</p>
+          ),
           h1: ({ children }) => (
-            <h1 className="mb-3 mt-5 text-lg font-semibold text-foreground first:mt-0">
+            <h1 className="mb-4 mt-8 text-xl font-semibold tracking-tight text-foreground first:mt-0">
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="mb-2 mt-4 text-base font-semibold text-foreground first:mt-0">
+            <h2 className="mb-3 mt-7 text-lg font-semibold tracking-tight text-foreground first:mt-0">
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="mb-2 mt-3 text-sm font-semibold text-foreground first:mt-0">
+            <h3 className="mb-2 mt-5 text-base font-semibold text-foreground first:mt-0">
               {children}
             </h3>
           ),
           ul: ({ children }) => (
-            <ul className="mb-3 ml-4 list-disc space-y-1 marker:text-muted-foreground">
+            <ul className="mb-4 ml-5 list-disc space-y-1.5 marker:text-muted-foreground/50">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="mb-3 ml-4 list-decimal space-y-1 marker:text-muted-foreground">
+            <ol className="mb-4 ml-5 list-decimal space-y-1.5 marker:text-muted-foreground/50">
               {children}
             </ol>
           ),
-          li: ({ children }) => <li className="text-sm">{children}</li>,
+          li: ({ children }) => <li>{children}</li>,
           blockquote: ({ children }) => (
-            <blockquote className="my-3 border-l-2 border-primary/30 bg-primary/5 py-1 pl-4 text-[13px] text-muted-foreground italic">
+            <blockquote className="my-4 border-l-2 border-primary/40 pl-4 text-muted-foreground italic">
               {children}
             </blockquote>
           ),
@@ -138,33 +140,35 @@ function MarkdownContent({ content }: { content: string }) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary underline underline-offset-2 hover:text-primary/80"
+              className="text-primary underline decoration-primary/30 underline-offset-2 hover:decoration-primary/60 transition-colors"
               {...props}
             >
               {children}
             </a>
           ),
           table: ({ children }) => (
-            <div className="my-3 overflow-x-auto rounded-lg border border-border">
-              <table className="w-full text-[13px]">{children}</table>
+            <div className="my-4 overflow-x-auto rounded-xl border border-border/50">
+              <table className="w-full text-sm">{children}</table>
             </div>
           ),
           thead: ({ children }) => (
-            <thead className="bg-muted/50 text-left">{children}</thead>
+            <thead className="bg-muted/40 text-left">{children}</thead>
           ),
           th: ({ children }) => (
-            <th className="border-b border-border px-3 py-2 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <th className="border-b border-border/50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className="border-b border-border/50 px-3 py-2 text-muted-foreground">
+            <td className="border-b border-border/30 px-4 py-2.5 text-muted-foreground">
               {children}
             </td>
           ),
-          hr: () => <hr className="my-4 border-border" />,
+          hr: () => <hr className="my-6 border-border/40" />,
           strong: ({ children }) => (
-            <strong className="font-semibold text-foreground">{children}</strong>
+            <strong className="font-semibold text-foreground">
+              {children}
+            </strong>
           ),
           em: ({ children }) => (
             <em className="text-muted-foreground">{children}</em>
@@ -178,7 +182,7 @@ function MarkdownContent({ content }: { content: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Message component
+// Message component — conversational, no avatars, user bubbles right-aligned
 // ---------------------------------------------------------------------------
 
 export function ChatMessage({
@@ -202,137 +206,88 @@ export function ChatMessage({
     setTimeout(() => setCopied(false), 2000);
   }, [fullText]);
 
-  return (
-    <div
-      className={cn(
-        "group/msg py-5 px-4 md:px-6",
-        !isUser && "bg-muted/30",
-      )}
-    >
-      <div className="mx-auto max-w-3xl">
-        <div className="flex gap-3">
-          {/* Avatar */}
-          <div
-            className={cn(
-              "flex size-7 shrink-0 items-center justify-center rounded-full mt-0.5",
-              isUser
-                ? "bg-foreground text-background"
-                : "bg-primary/10 border border-primary/20",
-            )}
-          >
-            <span
-              className={cn(
-                "font-mono text-[10px] font-bold",
-                !isUser && "text-primary",
-              )}
-            >
-              {isUser ? "U" : "AI"}
-            </span>
-          </div>
-
-          <div className="flex-1 min-w-0">
-            {/* Role label */}
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-foreground">
-                {isUser ? "You" : "Assistant"}
-              </span>
-            </div>
-
-            {/* Content */}
-            {parts.map((part, idx) => {
-              if (part.type === "text") {
-                return isUser ? (
-                  <p
-                    key={idx}
-                    className="text-sm leading-[1.7] text-foreground whitespace-pre-wrap"
-                  >
-                    {part.text}
-                  </p>
-                ) : (
-                  <MarkdownContent key={idx} content={part.text ?? ""} />
-                );
-              }
-
-              if (part.type === "tool-invocation") {
-                const invocation = part.toolInvocation as {
-                  toolCallId: string;
-                  toolName: string;
-                  args: Record<string, unknown>;
-                  state: string;
-                  result?: unknown;
-                };
-                return (
-                  <ToolInvocation key={idx} invocation={invocation} />
-                );
-              }
-
-              return null;
-            })}
-
-            {/* Actions toolbar */}
-            {!isUser && fullText && (
-              <div className="mt-2 flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity">
-                <button
-                  onClick={handleCopy}
-                  className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                  title={copied ? "Copied" : "Copy"}
-                >
-                  {copied ? (
-                    <Check className="size-3" />
-                  ) : (
-                    <Copy className="size-3" />
-                  )}
-                </button>
-              </div>
-            )}
+  // User message — right-aligned bubble
+  if (isUser) {
+    return (
+      <div className="flex justify-end px-4 md:px-6 py-4">
+        <div className="max-w-[85%] md:max-w-[70%]">
+          <div className="rounded-2xl rounded-br-md bg-muted/70 px-4 py-3">
+            <p className="text-[15px] leading-[1.65] text-foreground whitespace-pre-wrap">
+              {fullText}
+            </p>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Assistant message — left-aligned, free-flowing, no background
+  return (
+    <div className="group/msg px-4 md:px-6 py-4">
+      <div className="mx-auto max-w-3xl">
+        {/* Content */}
+        {parts.map((part, idx) => {
+          if (part.type === "text") {
+            return <MarkdownContent key={idx} content={part.text ?? ""} />;
+          }
+
+          if (part.type === "tool-invocation") {
+            const invocation = part.toolInvocation as {
+              toolCallId: string;
+              toolName: string;
+              args: Record<string, unknown>;
+              state: string;
+              result?: unknown;
+            };
+            return <ToolInvocation key={idx} invocation={invocation} />;
+          }
+
+          return null;
+        })}
+
+        {/* Copy action — appears on hover */}
+        {fullText && (
+          <div className="mt-1 flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity">
+            <button
+              onClick={handleCopy}
+              className={cn(
+                "flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors",
+                copied
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+              )}
+            >
+              {copied ? (
+                <>
+                  <Check className="size-3" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="size-3" />
+                  <span>Copy</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Streaming indicator
+// Streaming indicator — subtle pulsing dot
 // ---------------------------------------------------------------------------
 
 export function StreamingIndicator() {
   return (
-    <div className="py-5 px-4 md:px-6 bg-muted/30">
-      <div className="mx-auto max-w-3xl">
-        <div className="flex gap-3">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-full mt-0.5 bg-primary/10 border border-primary/20">
-            <span className="font-mono text-[10px] font-bold text-primary">
-              AI
-            </span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-foreground">
-                Assistant
-              </span>
-            </div>
-            <div className="flex items-center gap-2 py-1">
-              <div className="flex gap-1">
-                <div
-                  className="size-1.5 rounded-full bg-primary animate-bounce"
-                  style={{ animationDelay: "0ms" }}
-                />
-                <div
-                  className="size-1.5 rounded-full bg-primary animate-bounce"
-                  style={{ animationDelay: "150ms" }}
-                />
-                <div
-                  className="size-1.5 rounded-full bg-primary animate-bounce"
-                  style={{ animationDelay: "300ms" }}
-                />
-              </div>
-              <span className="text-[11px] text-muted-foreground">
-                Thinking...
-              </span>
-            </div>
-          </div>
-        </div>
+    <div className="px-4 md:px-6 py-6">
+      <div className="mx-auto max-w-3xl flex items-center gap-2">
+        <div className="size-2 rounded-full bg-primary animate-pulse" />
+        <span className="text-sm text-muted-foreground">
+          Thinking&hellip;
+        </span>
       </div>
     </div>
   );

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import {
-  ChevronDown,
   ChevronRight,
   Loader2,
   CheckCircle2,
@@ -27,33 +26,35 @@ interface ToolInvocationData {
 
 const TOOL_META: Record<
   string,
-  { label: string; icon: React.ElementType; color: string }
+  { label: string; icon: React.ElementType }
 > = {
-  searchFiles: { label: "Searching files", icon: Search, color: "text-blue-500" },
-  listFiles: { label: "Listing files", icon: FileText, color: "text-blue-500" },
-  getFile: { label: "Getting file details", icon: FileText, color: "text-blue-500" },
-  renameFile: { label: "Renaming file", icon: FileText, color: "text-amber-500" },
-  moveFile: { label: "Moving file", icon: FileText, color: "text-amber-500" },
-  deleteFile: { label: "Deleting file", icon: AlertCircle, color: "text-red-500" },
-  getFileDownloadUrl: { label: "Getting download link", icon: Link, color: "text-blue-500" },
-  listFolders: { label: "Listing folders", icon: FolderPlus, color: "text-blue-500" },
-  createFolder: { label: "Creating folder", icon: FolderPlus, color: "text-green-500" },
-  renameFolder: { label: "Renaming folder", icon: FolderPlus, color: "text-amber-500" },
-  moveFolder: { label: "Moving folder", icon: FolderPlus, color: "text-amber-500" },
-  deleteFolder: { label: "Deleting folder", icon: AlertCircle, color: "text-red-500" },
-  createShareLink: { label: "Creating share link", icon: Link, color: "text-green-500" },
-  listShareLinks: { label: "Listing share links", icon: Link, color: "text-blue-500" },
-  revokeShareLink: { label: "Revoking share link", icon: Link, color: "text-red-500" },
-  listTags: { label: "Listing tags", icon: Tag, color: "text-purple-500" },
-  createTag: { label: "Creating tag", icon: Tag, color: "text-green-500" },
-  tagFile: { label: "Tagging file", icon: Tag, color: "text-purple-500" },
-  getWorkspaceInfo: { label: "Getting workspace info", icon: Info, color: "text-blue-500" },
-  listMembers: { label: "Listing members", icon: Info, color: "text-blue-500" },
-  listPlugins: { label: "Listing plugins", icon: Plug, color: "text-blue-500" },
+  searchFiles: { label: "Searched files", icon: Search },
+  listFiles: { label: "Listed files", icon: FileText },
+  getFile: { label: "Retrieved file details", icon: FileText },
+  renameFile: { label: "Renamed file", icon: FileText },
+  moveFile: { label: "Moved file", icon: FileText },
+  deleteFile: { label: "Deleted file", icon: AlertCircle },
+  getFileDownloadUrl: { label: "Generated download link", icon: Link },
+  listFolders: { label: "Listed folders", icon: FolderPlus },
+  createFolder: { label: "Created folder", icon: FolderPlus },
+  renameFolder: { label: "Renamed folder", icon: FolderPlus },
+  moveFolder: { label: "Moved folder", icon: FolderPlus },
+  deleteFolder: { label: "Deleted folder", icon: AlertCircle },
+  createShareLink: { label: "Created share link", icon: Link },
+  listShareLinks: { label: "Listed share links", icon: Link },
+  revokeShareLink: { label: "Revoked share link", icon: Link },
+  listTags: { label: "Listed tags", icon: Tag },
+  createTag: { label: "Created tag", icon: Tag },
+  tagFile: { label: "Tagged file", icon: Tag },
+  getWorkspaceInfo: { label: "Retrieved workspace info", icon: Info },
+  listMembers: { label: "Listed members", icon: Info },
+  listPlugins: { label: "Listed plugins", icon: Plug },
 };
 
 function getToolMeta(toolName: string) {
-  return TOOL_META[toolName] ?? { label: toolName, icon: Info, color: "text-muted-foreground" };
+  return (
+    TOOL_META[toolName] ?? { label: toolName, icon: Info }
+  );
 }
 
 function formatToolResult(toolName: string, result: unknown): string | null {
@@ -67,9 +68,8 @@ function formatToolResult(toolName: string, result: unknown): string | null {
       const folder = r.folder as any;
       return folder ? `Created folder "${folder.name}"` : null;
     }
-    case "createShareLink": {
+    case "createShareLink":
       return r.shareUrl ? `Share link: ${r.shareUrl}` : null;
-    }
     case "searchFiles":
     case "listFiles": {
       const files = r.files as any[];
@@ -104,7 +104,7 @@ function formatToolResult(toolName: string, result: unknown): string | null {
       return `Applied ${tags.length} tag${tags.length === 1 ? "" : "s"}`;
     }
     case "getFileDownloadUrl":
-      return r.downloadUrl ? `Download URL ready` : null;
+      return r.downloadUrl ? "Download URL ready" : null;
     default:
       return r.success ? "Done" : null;
   }
@@ -117,7 +117,6 @@ export function ToolInvocation({
 }) {
   const [expanded, setExpanded] = useState(false);
   const meta = getToolMeta(invocation.toolName);
-  const Icon = meta.icon;
   const isComplete = invocation.state === "result";
   const hasResult = invocation.result != null;
   const resultSummary = hasResult
@@ -129,59 +128,52 @@ export function ToolInvocation({
     (invocation.result as any)?.error;
 
   return (
-    <div className="my-2 rounded-lg border border-border/60 bg-background overflow-hidden">
-      {/* Header */}
+    <div className="my-3">
+      {/* Collapsed row — subtle, inline */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/30 transition-colors"
+        className="group/tool flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         {isComplete ? (
           hasError ? (
             <AlertCircle className="size-3.5 text-destructive shrink-0" />
           ) : (
-            <CheckCircle2 className="size-3.5 text-green-500 shrink-0" />
+            <CheckCircle2 className="size-3.5 text-primary/60 shrink-0" />
           )
         ) : (
-          <Loader2 className="size-3.5 animate-spin text-muted-foreground shrink-0" />
+          <Loader2 className="size-3.5 animate-spin shrink-0" />
         )}
 
-        <Icon className={cn("size-3.5 shrink-0", meta.color)} />
-
-        <span className="text-xs font-medium text-foreground">
-          {isComplete && resultSummary
-            ? resultSummary
-            : meta.label}
+        <span>
+          {isComplete && resultSummary ? resultSummary : meta.label}
         </span>
 
-        <div className="ml-auto">
-          {expanded ? (
-            <ChevronDown className="size-3 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="size-3 text-muted-foreground" />
+        <ChevronRight
+          className={cn(
+            "size-3 transition-transform",
+            expanded && "rotate-90",
           )}
-        </div>
+        />
       </button>
 
       {/* Expanded details */}
       {expanded && (
-        <div className="border-t border-border/40 px-3 py-2 space-y-2">
-          {/* Arguments */}
+        <div className="mt-2 ml-5.5 space-y-2 text-xs">
           <div>
             <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
               Arguments
             </span>
-            <pre className="mt-1 rounded bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground overflow-auto max-h-[200px]">
+            <pre className="mt-1 rounded-lg bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground overflow-auto max-h-[200px]">
               {JSON.stringify(invocation.args, null, 2)}
             </pre>
           </div>
 
-          {/* Result */}
           {hasResult && (
             <div>
               <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                 Result
               </span>
-              <pre className="mt-1 rounded bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground overflow-auto max-h-[300px]">
+              <pre className="mt-1 rounded-lg bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground overflow-auto max-h-[300px]">
                 {JSON.stringify(invocation.result, null, 2)}
               </pre>
             </div>
