@@ -41,7 +41,7 @@ export function ShareLinkCard({ link }: { link: ShareLinkData }) {
       <div className="flex items-center gap-3 px-4 py-3">
         {/* Link icon */}
         <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-          <ExternalLink className="size-[18px] text-primary" />
+          <ExternalLink className="size-4.5 text-primary" />
         </div>
 
         {/* URL */}

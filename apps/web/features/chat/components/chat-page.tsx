@@ -31,6 +31,10 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<{
+    text: string;
+    attachedFiles: string[];
+  } | null>(null);
 
   // --- Data fetching ---
   const { data: conversations = [] } = trpc.assistant.conversations.useQuery();
@@ -151,6 +155,12 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
     setInputValue("");
     setAttachments([]);
 
+    // Show the user message instantly while async work happens
+    setPendingMessage({
+      text: currentText,
+      attachedFiles: currentAttachments.map((att) => att.file.name),
+    });
+
     // Upload any attached files first
     let uploadedFiles: { id: string; name: string }[] = [];
     if (currentAttachments.length > 0) {
@@ -173,6 +183,7 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
         uploadedFiles = results;
       } catch (err) {
         toast.error("Failed to upload attachments");
+        setPendingMessage(null);
         return;
       }
     }
@@ -187,6 +198,12 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
       messageText = `${currentText}\n\n[Attached files uploaded to workspace root]\n${fileList}`;
     }
 
+    // Clear pending — sendMessage adds the real user message optimistically
+    const send = (text: string) => {
+      setPendingMessage(null);
+      sendMessage({ text });
+    };
+
     // Ensure we have a conversation
     if (!conversationId) {
       createConversationMutation.mutate(
@@ -195,14 +212,14 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
           onSuccess: (conv) => {
             setConversationId(conv.id);
             transportBody.current.conversationId = conv.id;
-            sendMessage({ text: messageText });
+            send(messageText);
           },
         },
       );
       return;
     }
 
-    sendMessage({ text: messageText });
+    send(messageText);
   }, [
     inputValue,
     attachments,
@@ -216,8 +233,14 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
 
   const handleSuggestionClick = useCallback(
     (prompt: string) => {
-      setInputValue(prompt);
-      // Auto-create and send
+      setInputValue("");
+      setPendingMessage({ text: prompt, attachedFiles: [] });
+
+      const send = (text: string) => {
+        setPendingMessage(null);
+        sendMessage({ text });
+      };
+
       if (!conversationId) {
         createConversationMutation.mutate(
           {},
@@ -225,12 +248,12 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
             onSuccess: (conv) => {
               setConversationId(conv.id);
               transportBody.current.conversationId = conv.id;
-              sendMessage({ text: prompt });
+              send(prompt);
             },
           },
         );
       } else {
-        sendMessage({ text: prompt });
+        send(prompt);
       }
     },
     [conversationId, createConversationMutation, sendMessage],
@@ -310,7 +333,7 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
         </div>
 
         {/* Messages or empty state */}
-        {messages.length === 0 && !isStreaming ? (
+        {messages.length === 0 && !pendingMessage && !isStreaming ? (
           <EmptyState onSuggestionClick={handleSuggestionClick} />
         ) : (
           <ScrollArea className="flex-1 mb-[-20px]">
@@ -329,7 +352,14 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
                   onFileClick={setPreviewFileId}
                 />
               ))}
-              {isStreaming &&
+              {pendingMessage && (
+                <ChatMessage
+                  key="pending"
+                  role="user"
+                  parts={[{ type: "text", text: pendingMessage.text }]}
+                />
+              )}
+              {(isStreaming || pendingMessage) &&
                 messages[messages.length - 1]?.role !== "assistant" && (
                   <StreamingIndicator />
                 )}

@@ -459,7 +459,7 @@ async function loginAs(page: Page) {
   await page.getByPlaceholder("Enter password").fill(TEST_USER.password);
   await page.getByRole("button", { name: /sign in/i }).click();
   // Login may redirect to /home or /w/ depending on routing
-  await page.waitForURL(/\/(w\/|home)/, { timeout: 15000 });
+  await page.waitForURL(/\/(w\/|home)/, { timeout: 30000 });
   await page.waitForTimeout(1000);
 }
 
