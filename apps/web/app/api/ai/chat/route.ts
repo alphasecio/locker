@@ -189,24 +189,24 @@ export async function POST(req: NextRequest) {
     result.consumeStream();
 
     // Persist assistant response after streaming completes (fire-and-forget).
-    // Use result.text which resolves with the full generated text after the
-    // stream finishes. We also capture tool call steps for richer persistence.
-    Promise.resolve(result.text)
-      .then(async (fullText) => {
+    // Iterate steps in order so text and tool invocations stay interleaved
+    // exactly as the user saw them during streaming.
+    Promise.resolve(result.steps)
+      .then(async (steps) => {
         try {
           const parts: any[] = [];
 
-          if (fullText) {
-            parts.push({ type: "text", text: fullText });
-          }
-
-          // Capture tool invocations from steps
-          const steps = await result.steps;
           for (const step of steps) {
-            if (step.toolCalls) {
+            // Text generated in this step
+            if (step.text) {
+              parts.push({ type: "text", text: step.text });
+            }
+
+            // Tool invocations from this step (after the text, preserving order)
+            if (step.toolCalls && step.toolCalls.length > 0) {
               for (const tc of step.toolCalls) {
                 const tcAny = tc as any;
-                const tr = step.toolResults?.find(
+                const tr = (step.toolResults as any[])?.find(
                   (r: any) => r.toolCallId === tcAny.toolCallId,
                 );
                 parts.push({
@@ -216,7 +216,7 @@ export async function POST(req: NextRequest) {
                     toolName: tcAny.toolName,
                     args: tcAny.args,
                     state: "result",
-                    result: (tr as any)?.result ?? null,
+                    result: tr?.result ?? null,
                   },
                 });
               }
@@ -241,7 +241,7 @@ export async function POST(req: NextRequest) {
         }
       })
       .catch((err) => {
-        console.error("[ai/chat] Failed to get text:", err);
+        console.error("[ai/chat] Failed to persist steps:", err);
       });
 
     return result.toUIMessageStreamResponse({
