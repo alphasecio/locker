@@ -34,6 +34,7 @@ import {
 import {
   createStorageForWorkspace,
   createStorageForFile,
+  getFileLocationContext,
   getFileStoragePath,
   getFileStoreId,
   getStoreById,
@@ -171,8 +172,8 @@ export async function GET(
   if (!file) return noSuchKey(key);
 
   try {
-    const storage = await createStorageForFile(file.id);
-    const result = await storage.download(await getFileStoragePath(file.id));
+    const { storage, storagePath } = await getFileLocationContext(file.id);
+    const result = await storage.download(storagePath);
     return new Response(result.data as any, {
       status: 200,
       headers: {

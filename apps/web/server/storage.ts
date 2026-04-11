@@ -202,7 +202,7 @@ export async function createStorageForWorkspace(
   };
 }
 
-async function getFileLocationContext(
+export async function getFileLocationContext(
   fileId: string,
   preferredStoreId?: string,
 ): Promise<{

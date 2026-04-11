@@ -12,6 +12,7 @@ import type { Database } from "@locker/database";
 import {
   createStorageForFile,
   getActiveStores,
+  getFileLocationContext,
   getFileStoragePath,
   getPrimaryStore,
   getStoreById,
@@ -48,8 +49,7 @@ export async function runFileReadyHooks(params: {
     storesForWorkspace.filter((store) => store.writeMode === "write").length > 1;
 
   const getContent = async () => {
-    const storage = await createStorageForFile(file.id);
-    const storagePath = await getFileStoragePath(file.id);
+    const { storage, storagePath } = await getFileLocationContext(file.id);
     const { data } = await storage.download(storagePath);
     return streamToString(data);
   };

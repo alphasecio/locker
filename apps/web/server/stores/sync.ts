@@ -446,20 +446,13 @@ export async function ingestFromReadOnlyStore(params: {
       });
       ingested += 1;
     } catch {
-      await db
-        .update(fileBlobs)
-        .set({
-          state: "failed",
-          updatedAt: new Date(),
-        })
-        .where(eq(fileBlobs.id, pending.blobId));
-      await db
-        .update(files)
-        .set({
-          status: "failed",
-          updatedAt: new Date(),
-        })
-        .where(eq(files.id, pending.fileId));
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(blobLocations)
+          .where(eq(blobLocations.blobId, pending.blobId));
+        await tx.delete(files).where(eq(files.id, pending.fileId));
+        await tx.delete(fileBlobs).where(eq(fileBlobs.id, pending.blobId));
+      });
     }
   }
 
