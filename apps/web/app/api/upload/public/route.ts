@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@locker/database/client";
-import { uploadLinks, workspaces } from "@locker/database";
+import { blobLocations, fileBlobs, files, uploadLinks, workspaces } from "@locker/database";
 import { shouldEnforceQuota } from "../../../../server/storage";
 import { eq, sql } from "drizzle-orm";
 import { verifyLinkPassword } from "@/server/security/password";
@@ -100,11 +100,23 @@ export async function POST(req: NextRequest) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  await pending.storage.upload({
-    path: pending.storagePath,
-    data: buffer,
-    contentType: file.type || "application/octet-stream",
-  });
+  try {
+    await pending.storage.upload({
+      path: pending.storagePath,
+      data: buffer,
+      contentType: file.type || "application/octet-stream",
+    });
+  } catch (err) {
+    await db.transaction(async (tx) => {
+      await tx.delete(blobLocations).where(eq(blobLocations.blobId, pending.blobId));
+      await tx.delete(files).where(eq(files.id, pending.fileId));
+      await tx.delete(fileBlobs).where(eq(fileBlobs.id, pending.blobId));
+    }).catch(() => {});
+    return NextResponse.json(
+      { error: `Upload failed: ${(err as Error).message}` },
+      { status: 502 },
+    );
+  }
 
   await markFileUploadReady({ db, fileId: pending.fileId });
 

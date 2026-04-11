@@ -21,6 +21,7 @@ import {
   getStoreById,
 } from "../storage";
 import { createPendingFileUpload, markFileUploadReady } from "./file-records";
+import { runFileReadyHooks } from "./lifecycle";
 
 type SyncRunKind = typeof replicationRuns.$inferInsert.kind;
 
@@ -444,6 +445,14 @@ export async function ingestFromReadOnlyStore(params: {
         fileId: pending.fileId,
         sourceStoreId: pending.storeId,
       });
+
+      void runFileReadyHooks({
+        db,
+        workspaceId: store.workspaceId,
+        userId: params.triggeredByUserId ?? workspace.ownerId,
+        fileId: pending.fileId,
+      }).catch(() => {});
+
       ingested += 1;
     } catch {
       await db.transaction(async (tx) => {

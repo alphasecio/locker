@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
   }
 
   let newFile: typeof files.$inferSelect | undefined;
-  if (existingFileId) {
+  if (existingFileId && existingUploadRecord) {
     await db
       .update(files)
       .set({
@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
         mimeType: file.type || "application/octet-stream",
         updatedAt: new Date(),
       })
-      .where(eq(fileBlobs.id, existingUploadRecord!.blobId));
+      .where(eq(fileBlobs.id, existingUploadRecord.blobId));
   } else {
     await db
       .update(files)
