@@ -53,19 +53,12 @@ export function Storage() {
         >
           <p className="mkt-label text-primary">Bring your own backend</p>
           <h2 className="mkt-heading mt-2 text-foreground">
-            One env var. Any storage provider.
+            Mix and match storage providers
           </h2>
           <p className="mkt-body mt-4 max-w-2xl text-balance text-muted-foreground">
-            Set{" "}
-            <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-sm">
-              BLOB_STORAGE_PROVIDER
-            </code>{" "}
-            in your{" "}
-            <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-sm">
-              .env
-            </code>{" "}
-            and you&apos;re done. Switch providers anytime without touching a
-            line of code.
+            Attach multiple stores per workspace. Choose a primary for writes,
+            add replicas for redundancy, and ingest from read-only
+            sources&mdash;each with its own credentials.
           </p>
         </MotionDiv>
 

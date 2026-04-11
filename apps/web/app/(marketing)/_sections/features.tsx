@@ -16,10 +16,10 @@ import { MotionDiv } from "../_components/fade-in";
 
 const features = [
   {
-    title: "Storage Provider Agnostic",
+    title: "Multi-Store Replication",
     icon: HardDriveIcon,
     description:
-      "Swap between local filesystem, AWS S3, Cloudflare R2, or Vercel Blob with a single environment variable. Your data, your infrastructure.",
+      "Attach multiple storage backends per workspace. Designate a primary store, fan out writable replicas for redundancy, and ingest files from read-only sources.",
   },
   {
     title: "Search Inside Images & PDFs",

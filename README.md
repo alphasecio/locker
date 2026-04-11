@@ -15,7 +15,8 @@ Open-source file storage and knowledge platform. A self-hostable alternative to 
 - **Document Transcription** — AI-powered OCR/transcription for images and PDFs, making non-text files searchable
 - **Notifications** — In-app notifications for workspace invites and announcements
 - **Workspace Invites** — Invite users via email with token-based onboarding flow
-- **Storage Provider Agnostic** — Swap between Local, AWS S3, Cloudflare R2, or Vercel Blob via a single env var
+- **Multi-Store Storage** — Attach multiple storage backends (Local, S3, R2, Vercel Blob) per workspace with automatic replication across stores
+- **Read-Only Ingest** — Scan external buckets or directories for new files and import them into Locker without moving originals
 - **Storage Quotas** — Per-user storage limits with usage tracking
 - **Virtual Bash Filesystem** — Traverse workspace files with `ls`, `cd`, `find`, `cat`, `grep`, etc. via `just-bash`
 
@@ -98,9 +99,11 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000), create an account, and start uploading files.
 
-## Storage Providers
+## Storage
 
-Set `BLOB_STORAGE_PROVIDER` in `.env`:
+### Platform default
+
+Set `BLOB_STORAGE_PROVIDER` in `.env` to configure the default storage backend for new workspaces:
 
 | Provider         | Value    | Required Env Vars                                                        |
 | ---------------- | -------- | ------------------------------------------------------------------------ |
@@ -108,6 +111,15 @@ Set `BLOB_STORAGE_PROVIDER` in `.env`:
 | AWS S3           | `s3`     | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET`  |
 | Cloudflare R2    | `r2`     | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` |
 | Vercel Blob      | `vercel` | `BLOB_READ_WRITE_TOKEN`                                                  |
+
+### Multi-store
+
+Workspace admins can attach additional stores from **Settings > Stores**. Each store can be configured as:
+
+- **Writable replica** — files are automatically synced to this store for redundancy
+- **Read-only ingest** — Locker scans the store for new files and imports them without moving the originals
+
+Stores use their own credentials (BYOB), so different teams can bring different backends. A primary store is designated per workspace for new uploads; replicas receive copies automatically.
 
 ## Plugins
 
