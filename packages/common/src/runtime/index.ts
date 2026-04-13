@@ -21,6 +21,8 @@ export interface RuntimeCapabilities {
   overridden: boolean;
   /** Set when LOCKER_RUNTIME_ENV was provided but not a valid value. */
   overrideRejected: string | null;
+  /** True when a task queue backend is available for delegating long-running work. */
+  taskQueueAvailable: boolean;
   platformStorageProvider: PlatformStorageProviderId | null;
   configuredPlatformStorageProvider: PlatformStorageProviderId | null;
 }
@@ -133,6 +135,8 @@ export function detectRuntime(
   const localFilesystemAvailable = runtimeClass === "persistent";
   const longRunningSupported = runtimeClass === "persistent";
 
+  const taskQueueAvailable = !!env.RENDER_WORKFLOW_SLUG && !!env.RENDER_API_KEY;
+
   const explicitProvider = mapBlobStorageProvider(env.BLOB_STORAGE_PROVIDER);
   const platformStorageProvider =
     explicitProvider ?? inferStorageProvider(env, runtimeClass);
@@ -150,6 +154,7 @@ export function detectRuntime(
     longRunningSupported,
     overridden,
     overrideRejected,
+    taskQueueAvailable,
     platformStorageProvider,
     configuredPlatformStorageProvider,
   };

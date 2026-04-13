@@ -97,6 +97,24 @@ describe("detectRuntime", () => {
     expect(result.configuredPlatformStorageProvider).toBe("r2");
   });
 
+  it("sets taskQueueAvailable when both RENDER_WORKFLOW_SLUG and RENDER_API_KEY are present", () => {
+    const result = detectRuntime({
+      VERCEL: "1",
+      RENDER_WORKFLOW_SLUG: "locker-jobs",
+      RENDER_API_KEY: "rnd_abc123",
+    });
+    expect(result.taskQueueAvailable).toBe(true);
+    expect(result.longRunningSupported).toBe(false);
+  });
+
+  it("taskQueueAvailable is false when RENDER_API_KEY is missing", () => {
+    const result = detectRuntime({
+      VERCEL: "1",
+      RENDER_WORKFLOW_SLUG: "locker-jobs",
+    });
+    expect(result.taskQueueAvailable).toBe(false);
+  });
+
   it("detects R2 as unconfigured when bucket is missing", () => {
     const result = detectRuntime({
       BLOB_STORAGE_PROVIDER: "r2",

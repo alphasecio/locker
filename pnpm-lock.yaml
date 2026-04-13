@@ -38,6 +38,9 @@ importers:
       '@locker/email':
         specifier: workspace:*
         version: link:../../packages/email
+      '@locker/jobs':
+        specifier: workspace:^
+        version: link:../../packages/jobs
       '@locker/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -190,6 +193,34 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  apps/workflows:
+    dependencies:
+      '@locker/common':
+        specifier: workspace:*
+        version: link:../../packages/common
+      '@locker/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@locker/jobs':
+        specifier: workspace:*
+        version: link:../../packages/jobs
+      '@locker/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      '@renderinc/sdk':
+        specifier: ^0.5.0
+        version: 0.5.1
+      drizzle-orm:
+        specifier: ^0.45.1
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.15)(pg@8.20.0)(sql.js@1.14.1)
+    devDependencies:
+      tsx:
+        specifier: ^4.19.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/common:
     dependencies:
       zod:
@@ -246,6 +277,25 @@ importers:
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.14
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/jobs:
+    dependencies:
+      '@locker/common':
+        specifier: workspace:*
+        version: link:../common
+      '@locker/database':
+        specifier: workspace:*
+        version: link:../database
+      '@locker/storage':
+        specifier: workspace:*
+        version: link:../storage
+      drizzle-orm:
+        specifier: ^0.45.1
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.15)(pg@8.20.0)(sql.js@1.14.1)
+    devDependencies:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -2276,7 +2326,7 @@ packages:
   '@radix-ui/react-use-layout-effect@1.1.1':
     resolution: {integrity: sha512-RbJRS4UWQFkzHTTwVymMTUv8EqYhOp8dOOviLj2ugtTiXRaRQS7GLGxZTLL1jWhMeoSCf5zmcZkqTl9IiYfXcQ==}
     peerDependencies:
-      '@types/react': 19.1.1
+      '@types/react': '*'
       react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
     peerDependenciesMeta:
       '@types/react':
@@ -2483,6 +2533,10 @@ packages:
     engines: {node: '>=20.0.0'}
     peerDependencies:
       react: ^18.0 || ^19.0 || ^19.0.0-rc
+
+  '@renderinc/sdk@0.5.1':
+    resolution: {integrity: sha512-SLWFvZaBk6DkewJo4rl8wN41QE65YXNbceB8oBvfxS76Ofssto1KKZlNPLhFfcBsvnGSAhFv6ewNgsRNDvLFgQ==}
+    engines: {node: '>=18.0.0'}
 
   '@rolldown/binding-android-arm64@1.0.0-rc.15':
     resolution: {integrity: sha512-YYe6aWruPZDtHNpwu7+qAHEMbQ/yRl6atqb/AhznLTnD3UY99Q1jE7ihLSahNWkF4EqRPVC4SiR4O0UkLK02tA==}
@@ -3860,6 +3914,10 @@ packages:
     resolution: {integrity: sha512-CRT1WTyuQoD771GW56XEZFQ/ZoSfWid1alKGDYMmkt2yl8UXrVR4pspqWNEcqKvVIzg6PAltWjxcSSPrboA4iA==}
     engines: {node: '>=18.0.0'}
 
+  eventsource@4.1.0:
+    resolution: {integrity: sha512-2GuF51iuHX6A9xdTccMTsNb7VO0lHZihApxhvQzJB5A03DvHDd2FQepodbMaztPBmBcE/ox7o2gqaxGhYB9LhQ==}
+    engines: {node: '>=20.0.0'}
+
   execa@5.1.1:
     resolution: {integrity: sha512-8uSpZZocAZRBAPIEINJj3Lo9HyGitllczc27Eh5YYojjMFMn8yHMDMaUHE2Jqfq05D/wucwI4JGURyXt1vchyg==}
     engines: {node: '>=10'}
@@ -4901,6 +4959,12 @@ packages:
   open@11.0.0:
     resolution: {integrity: sha512-smsWv2LzFjP03xmvFoJ331ss6h+jixfA4UUV/Bsiyuu4YJPfN+FIQGOIiv4w9/+MoHkfkJ22UIaQWRVFRfH6Vw==}
     engines: {node: '>=20'}
+
+  openapi-fetch@0.15.2:
+    resolution: {integrity: sha512-rdYTzUmSsJevmNqg7fwUVGuKc2Gfb9h6ph74EVPkPfIGJaZTfqdIbJahtbJ3qg1LKinln30hqZniLnKpH0RJBg==}
+
+  openapi-typescript-helpers@0.0.15:
+    resolution: {integrity: sha512-opyTPaunsklCBpTK8JGef6mfPhLSnyy5a0IN9vKtx3+4aExf+KxEqYwIy3hqkedXIB97u357uLMJsOnm3GVjsw==}
 
   ora@8.2.0:
     resolution: {integrity: sha512-weP+BZ8MVNnlCm8c0Qdc1WSWq4Qn7I+9CJGm7Qali6g44e/PUzbjNqJX5NJ9ljlNMosfJvg1fKEGILklK9cwnw==}
@@ -8298,6 +8362,11 @@ snapshots:
     dependencies:
       react: 19.2.4
 
+  '@renderinc/sdk@0.5.1':
+    dependencies:
+      eventsource: 4.1.0
+      openapi-fetch: 0.15.2
+
   '@rolldown/binding-android-arm64@1.0.0-rc.15':
     optional: true
 
@@ -9681,6 +9750,10 @@ snapshots:
     dependencies:
       eventsource-parser: 3.0.6
 
+  eventsource@4.1.0:
+    dependencies:
+      eventsource-parser: 3.0.6
+
   execa@5.1.1:
     dependencies:
       cross-spawn: 7.0.6
@@ -10984,6 +11057,12 @@ snapshots:
       is-inside-container: 1.0.0
       powershell-utils: 0.1.0
       wsl-utils: 0.3.1
+
+  openapi-fetch@0.15.2:
+    dependencies:
+      openapi-typescript-helpers: 0.0.15
+
+  openapi-typescript-helpers@0.0.15: {}
 
   ora@8.2.0:
     dependencies:

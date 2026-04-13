@@ -575,6 +575,9 @@ export default function StoresSettingsPage() {
   const { data: stores = [], isLoading } = trpc.stores.list.useQuery();
   const { data: capabilities } = useRuntime();
   const isServerless = capabilities ? !capabilities.longRunningSupported : false;
+  const canSync = capabilities
+    ? capabilities.longRunningSupported || capabilities.taskQueueAvailable
+    : false;
 
   // Track which stores have in-flight operations
   const [busyStores, setBusyStores] = useState<
@@ -618,7 +621,7 @@ export default function StoresSettingsPage() {
     onMutate: (vars) => markBusy(vars?.storeId, "Syncing"),
     onSuccess: (_data, vars) => {
       clearBusy(vars?.storeId);
-      toast.success("Sync completed");
+      toast.success("Sync started");
       invalidate();
     },
     onError: (error, vars) => {
@@ -721,8 +724,8 @@ export default function StoresSettingsPage() {
               variant="outline"
               size="sm"
               onClick={() => syncStores.mutate({})}
-              disabled={syncStores.isPending || isRunActive || isServerless}
-              title={isServerless ? "Sync is not available on serverless runtimes" : undefined}
+              disabled={syncStores.isPending || isRunActive || !canSync}
+              title={!canSync ? "Sync is not available on serverless runtimes without a task queue" : undefined}
             >
               {syncStores.isPending || isRunActive ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -919,11 +922,11 @@ export default function StoresSettingsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
-                            disabled={isBusy || isServerless}
+                            disabled={isBusy || !canSync}
                             onClick={() =>
                               syncStores.mutate({ storeId: store.id })
                             }
-                            title={isServerless ? "Sync is not available on serverless runtimes" : undefined}
+                            title={!canSync ? "Sync is not available on serverless runtimes without a task queue" : undefined}
                           >
                             <RefreshCw className="mr-2 size-3.5" />
                             Sync

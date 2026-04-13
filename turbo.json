@@ -30,7 +30,10 @@
     "QMD_SERVICE_URL",
     "QMD_API_SECRET",
     "LOCKER_RUNTIME_ENV",
-    "DOCKER_CONTAINER"
+    "DOCKER_CONTAINER",
+    "RENDER_WORKFLOW_SLUG",
+    "RENDER_API_KEY",
+    "S3_API_KEY_ENCRYPTION_SECRET"
   ],
   "tasks": {
     "build": {
