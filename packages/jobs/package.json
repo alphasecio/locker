@@ -1,0 +1,21 @@
+{
+  "name": "@locker/jobs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@locker/database": "workspace:*",
+    "@locker/storage": "workspace:*",
+    "@locker/common": "workspace:*",
+    "drizzle-orm": "^0.45.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

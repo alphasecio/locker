@@ -16,6 +16,7 @@
     "@locker/common": "workspace:*",
     "@locker/database": "workspace:*",
     "@locker/email": "workspace:*",
+    "@locker/jobs": "workspace:^",
     "@locker/storage": "workspace:*",
     "@next/third-parties": "^16.2.2",
     "@radix-ui/react-scroll-area": "^1.2.10",
