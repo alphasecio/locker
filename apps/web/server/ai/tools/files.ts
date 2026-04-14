@@ -1,7 +1,22 @@
 import { tool } from "ai";
 import { z } from "zod/v4";
-import { eq, and, asc, desc, ilike, inArray, sql, isNull, or } from "drizzle-orm";
-import { files, folders, workspaces, fileTranscriptions } from "@locker/database";
+import {
+  eq,
+  and,
+  asc,
+  desc,
+  ilike,
+  inArray,
+  sql,
+  isNull,
+  or,
+} from "drizzle-orm";
+import {
+  files,
+  folders,
+  workspaces,
+  fileTranscriptions,
+} from "@locker/database";
 import { resolvePluginEndpoint } from "../../plugins/resolve-endpoint";
 import { qmdClient } from "../../plugins/handlers/qmd-client";
 import { ftsClient } from "../../plugins/handlers/fts-client";
@@ -19,7 +34,11 @@ export function createFileTools(ctx: AssistantToolContext) {
         query: z.string().min(1).describe("Search query"),
       }),
       execute: async ({ query }) => {
-        const escapedQuery = query.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+        console.log("Searching files for query:", query);
+        const escapedQuery = query
+          .replace(/\\/g, "\\\\")
+          .replace(/%/g, "\\%")
+          .replace(/_/g, "\\_");
 
         // Search via plugins (QMD and FTS) in parallel
         const qmdEndpoint = await resolvePluginEndpoint(
@@ -61,10 +80,7 @@ export function createFileTools(ctx: AssistantToolContext) {
         ]);
 
         // Merge content results from search plugins
-        const scoreMap = new Map<
-          string,
-          { score: number; snippet?: string }
-        >();
+        const scoreMap = new Map<string, { score: number; snippet?: string }>();
         for (const r of [...qmdResults, ...ftsResults]) {
           const existing = scoreMap.get(r.fileId);
           if (!existing || r.score > existing.score) {
@@ -77,9 +93,7 @@ export function createFileTools(ctx: AssistantToolContext) {
         // This covers environments without QMD/FTS services.
         const transcriptionSnippets = new Map<string, string>();
         if (scoreMap.size === 0) {
-          const words = query
-            .split(/\s+/)
-            .filter((w) => w.length > 1);
+          const words = query.split(/\s+/).filter((w) => w.length > 1);
 
           if (words.length > 0) {
             // Search transcriptions for any of the query words
@@ -277,10 +291,7 @@ export function createFileTools(ctx: AssistantToolContext) {
           })
           .from(files)
           .where(
-            and(
-              eq(files.id, fileId),
-              eq(files.workspaceId, ctx.workspaceId),
-            ),
+            and(eq(files.id, fileId), eq(files.workspaceId, ctx.workspaceId)),
           )
           .limit(1);
 
@@ -300,10 +311,7 @@ export function createFileTools(ctx: AssistantToolContext) {
           .update(files)
           .set({ name, updatedAt: new Date() })
           .where(
-            and(
-              eq(files.id, fileId),
-              eq(files.workspaceId, ctx.workspaceId),
-            ),
+            and(eq(files.id, fileId), eq(files.workspaceId, ctx.workspaceId)),
           )
           .returning();
 
@@ -343,16 +351,15 @@ export function createFileTools(ctx: AssistantToolContext) {
           .update(files)
           .set({ folderId: targetFolderId, updatedAt: new Date() })
           .where(
-            and(
-              eq(files.id, fileId),
-              eq(files.workspaceId, ctx.workspaceId),
-            ),
+            and(eq(files.id, fileId), eq(files.workspaceId, ctx.workspaceId)),
           )
           .returning();
 
         if (!file) return { error: "File not found" };
         invalidateWorkspaceVfsSnapshot(ctx.workspaceId);
-        return { file: { id: file.id, name: file.name, folderId: file.folderId } };
+        return {
+          file: { id: file.id, name: file.name, folderId: file.folderId },
+        };
       },
     }),
 
@@ -367,10 +374,7 @@ export function createFileTools(ctx: AssistantToolContext) {
           .select()
           .from(files)
           .where(
-            and(
-              eq(files.id, fileId),
-              eq(files.workspaceId, ctx.workspaceId),
-            ),
+            and(eq(files.id, fileId), eq(files.workspaceId, ctx.workspaceId)),
           )
           .limit(1);
 
@@ -381,12 +385,11 @@ export function createFileTools(ctx: AssistantToolContext) {
         // failure is a no-op. An orphaned storage object can be GC'd
         // later; a ghost DB row pointing at deleted storage cannot.
         await ctx.db.transaction(async (tx) => {
-          await tx.delete(files).where(
-            and(
-              eq(files.id, fileId),
-              eq(files.workspaceId, ctx.workspaceId),
-            ),
-          );
+          await tx
+            .delete(files)
+            .where(
+              and(eq(files.id, fileId), eq(files.workspaceId, ctx.workspaceId)),
+            );
           await tx
             .update(workspaces)
             .set({
@@ -455,10 +458,7 @@ export function createFileTools(ctx: AssistantToolContext) {
           })
           .from(files)
           .where(
-            and(
-              eq(files.id, fileId),
-              eq(files.workspaceId, ctx.workspaceId),
-            ),
+            and(eq(files.id, fileId), eq(files.workspaceId, ctx.workspaceId)),
           )
           .limit(1);
 
