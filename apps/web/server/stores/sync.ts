@@ -326,8 +326,18 @@ export async function pullFromStore(params: {
 
         await db
           .update(blobLocations)
-          .set({ lastVerifiedAt: new Date(), updatedAt: new Date() })
-          .where(eq(blobLocations.blobId, existingBlob.id));
+          .set({
+            state: "available",
+            lastVerifiedAt: new Date(),
+            lastError: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(blobLocations.blobId, existingBlob.id),
+              eq(blobLocations.storeId, primary.store.id),
+            ),
+          );
 
         updated += 1;
         console.log(`${tag} Updated "${displayPath}"`);
