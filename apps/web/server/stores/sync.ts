@@ -270,7 +270,7 @@ export async function pullFromStore(params: {
       continue;
     }
 
-    // Check if a file with this display path already exists in the workspace
+    // Check if a live file with this display path already exists in the workspace
     const [existingBlob] = await db
       .select({
         id: fileBlobs.id,
@@ -284,6 +284,8 @@ export async function pullFromStore(params: {
         and(
           eq(fileBlobs.workspaceId, store.workspaceId),
           eq(fileBlobs.objectKey, displayPath),
+          inArray(fileBlobs.state, ["ready", "pending"]),
+          eq(files.status, "ready"),
         ),
       )
       .limit(1);
