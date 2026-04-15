@@ -25,13 +25,6 @@ import {
 } from "@/components/ui/dialog";
 import { MAX_FILE_SIZE } from "@locker/common";
 
-function deduplicateName(name: string): string {
-  const dotIndex = name.lastIndexOf(".");
-  const stem = dotIndex > 0 ? name.slice(0, dotIndex) : name;
-  const ext = dotIndex > 0 ? name.slice(dotIndex) : "";
-  return `${stem} (1)${ext}`;
-}
-
 interface FileConflict {
   existingFileId: string;
   existingFileSize: number;
@@ -72,7 +65,6 @@ export function UploadDialog({
   const completeMutation = trpc.uploads.complete.useMutation();
   const abortMutation = trpc.uploads.abort.useMutation();
   const setFileTagsMutation = trpc.tags.setFileTags.useMutation();
-  const checkConflictsMutation = trpc.uploads.checkConflicts.useMutation();
 
   const checkConflicts = useCallback(
     async (entries: UploadFileEntry[]) => {
@@ -82,7 +74,7 @@ export function UploadDialog({
       if (pendingNames.length === 0) return;
 
       try {
-        const existing = await checkConflictsMutation.mutateAsync({
+        const existing = await utils.uploads.checkConflicts.fetch({
           folderId,
           fileNames: pendingNames,
         });
@@ -113,7 +105,7 @@ export function UploadDialog({
         // Graceful degradation — proceed without conflict info
       }
     },
-    [folderId, checkConflictsMutation],
+    [folderId, utils],
   );
 
   // Populate files when opened with initialFiles (from desktop drop)
@@ -372,9 +364,7 @@ export function UploadDialog({
                       className="size-3.5 shrink-0"
                     />
                     <span className="text-xs truncate flex-1">
-                      {entry.conflict?.resolution === "keep-both"
-                        ? deduplicateName(entry.file.name)
-                        : entry.file.name}
+                      {entry.file.name}
                     </span>
                     <span className="text-xs font-mono text-muted-foreground shrink-0">
                       {formatBytes(entry.file.size)}
@@ -427,7 +417,7 @@ export function UploadDialog({
                           <span className="text-xs text-muted-foreground">
                             {entry.conflict.resolution === "replace"
                               ? "Will replace existing"
-                              : `Will save as "${deduplicateName(entry.file.name)}"`}
+                              : "Will keep both (renamed)"}
                           </span>
                         )}
                       </div>

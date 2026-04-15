@@ -35,7 +35,7 @@ export const uploadsRouter = createRouter({
 
   checkConflicts: workspaceProcedure
     .input(checkConflictsSchema)
-    .mutation(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }) => {
       const { db, workspaceId } = ctx;
       const folderId = input.folderId ?? null;
 
@@ -79,8 +79,8 @@ export const uploadsRouter = createRouter({
         }
       }
 
-      // Find existing file if replacing (needed for quota calc and deletion)
-      let existingFileToReplace: { id: string; size: number } | null = null;
+      // Find existing file if replacing (needed for quota calc)
+      let replaceFileId: string | undefined;
       if (input.conflictResolution === "replace") {
         const [existing] = await db
           .select({ id: files.id, size: files.size })
@@ -96,14 +96,34 @@ export const uploadsRouter = createRouter({
           .limit(1);
 
         if (existing) {
-          existingFileToReplace = { id: existing.id, size: Number(existing.size) };
+          replaceFileId = existing.id;
+
+          // Check quota using net delta (new size minus freed space)
+          if (await shouldEnforceQuota(workspaceId)) {
+            const [ws] = await db
+              .select({
+                storageUsed: workspaces.storageUsed,
+                storageLimit: workspaces.storageLimit,
+              })
+              .from(workspaces)
+              .where(eq(workspaces.id, workspaceId));
+
+            const netIncrease = input.fileSize - Number(existing.size);
+            if (
+              !ws ||
+              (ws.storageUsed ?? 0) + netIncrease > (ws.storageLimit ?? 0)
+            ) {
+              throw new TRPCError({
+                code: "PAYLOAD_TOO_LARGE",
+                message: "Storage quota exceeded",
+              });
+            }
+          }
         }
       }
 
-      // Check storage quota (skipped for BYOB and self-hosted/local).
-      // For replace, subtract the existing file's size from the net increase
-      // so the quota check passes when swapping a file for a similar-sized one.
-      if (await shouldEnforceQuota(workspaceId)) {
+      // Check storage quota for non-replace uploads
+      if (!replaceFileId && await shouldEnforceQuota(workspaceId)) {
         const [ws] = await db
           .select({
             storageUsed: workspaces.storageUsed,
@@ -112,10 +132,9 @@ export const uploadsRouter = createRouter({
           .from(workspaces)
           .where(eq(workspaces.id, workspaceId));
 
-        const netIncrease = input.fileSize - (existingFileToReplace?.size ?? 0);
         if (
           !ws ||
-          (ws.storageUsed ?? 0) + netIncrease > (ws.storageLimit ?? 0)
+          (ws.storageUsed ?? 0) + input.fileSize > (ws.storageLimit ?? 0)
         ) {
           throw new TRPCError({
             code: "PAYLOAD_TOO_LARGE",
@@ -124,16 +143,8 @@ export const uploadsRouter = createRouter({
         }
       }
 
-      // Delete existing file only after quota check passes
-      if (existingFileToReplace) {
-        await deleteFileEverywhere({
-          db,
-          workspaceId,
-          fileId: existingFileToReplace.id,
-          deletedByUserId: userId,
-        });
-      }
-
+      // Don't delete the old file here — defer to `complete` so the original
+      // survives if the upload fails. Let dedup assign a temporary unique name.
       const pending = await createPendingFileUpload({
         db,
         workspaceId,
@@ -143,20 +154,22 @@ export const uploadsRouter = createRouter({
         mimeType: input.contentType,
         size: input.fileSize,
         status: "uploading",
-        overwrite: input.conflictResolution === "replace",
       });
+
+      // Base response fields shared by all strategies
+      const base = {
+        fileId: pending.fileId,
+        storagePath: pending.storagePath,
+        replaceFileId,
+        originalFileName: replaceFileId ? input.fileName : undefined,
+      };
 
       // Determine upload strategy
       if (!pending.storage.supportsPresignedUpload) {
-        return {
-          fileId: pending.fileId,
-          storagePath: pending.storagePath,
-          strategy: "server-buffered" as const,
-        };
+        return { ...base, strategy: "server-buffered" as const };
       }
 
       if (input.fileSize < MULTIPART_THRESHOLD) {
-        // Single presigned PUT
         const { url } = await pending.storage.createPresignedUpload!({
           path: pending.storagePath,
           contentType: input.contentType,
@@ -164,8 +177,7 @@ export const uploadsRouter = createRouter({
         });
 
         return {
-          fileId: pending.fileId,
-          storagePath: pending.storagePath,
+          ...base,
           strategy: "presigned-put" as const,
           presignedUrl: url,
         };
@@ -185,8 +197,7 @@ export const uploadsRouter = createRouter({
       });
 
       return {
-        fileId: pending.fileId,
-        storagePath: pending.storagePath,
+        ...base,
         strategy: "multipart" as const,
         uploadId,
         partSize: MULTIPART_PART_SIZE,
@@ -222,6 +233,25 @@ export const uploadsRouter = createRouter({
           uploadId: input.uploadId,
           parts: input.parts,
         });
+      }
+
+      // For replace: delete the old file now that the new upload has succeeded.
+      // This is deferred from `initiate` so the original survives upload failures.
+      if (input.replaceFileId) {
+        await deleteFileEverywhere({
+          db,
+          workspaceId,
+          fileId: input.replaceFileId,
+          deletedByUserId: ctx.userId,
+        });
+
+        // Restore the original display name (dedup gave the new file a temp name)
+        if (input.originalFileName) {
+          await db
+            .update(files)
+            .set({ name: input.originalFileName })
+            .where(eq(files.id, input.fileId));
+        }
       }
 
       await markFileUploadReady({ db, fileId: input.fileId });
