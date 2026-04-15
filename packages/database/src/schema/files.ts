@@ -39,9 +39,13 @@ export const files = pgTable(
     thumbnailPath: text("thumbnail_path"),
     checksum: varchar("checksum", { length: 128 }),
     s3Key: text("s3_key"),
+    replacesFileId: uuid("replaces_file_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
+  // Additional partial unique indexes managed via raw SQL migration (0019):
+  //   files_unique_name_in_folder_idx — UNIQUE (workspace_id, folder_id, name) WHERE status='ready' AND folder_id IS NOT NULL
+  //   files_unique_name_at_root_idx   — UNIQUE (workspace_id, name) WHERE status='ready' AND folder_id IS NULL
   (table) => [
     index("files_workspace_id_idx").on(table.workspaceId),
     index("files_user_id_idx").on(table.userId),

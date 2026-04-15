@@ -167,6 +167,89 @@ async function deindexFile(params: {
   ]);
 }
 
+export type BlobLocationInfo = {
+  storeId: string;
+  storagePath: string;
+  writeMode: string;
+};
+
+/**
+ * Read blob locations for a file. Call this BEFORE deleting DB records,
+ * since cascade deletes will remove blobLocations rows.
+ */
+export async function readBlobLocations(
+  db: Database,
+  blobId: string,
+): Promise<BlobLocationInfo[]> {
+  return db
+    .select({
+      storeId: blobLocations.storeId,
+      storagePath: blobLocations.storagePath,
+      writeMode: stores.writeMode,
+    })
+    .from(blobLocations)
+    .innerJoin(stores, eq(blobLocations.storeId, stores.id))
+    .where(eq(blobLocations.blobId, blobId));
+}
+
+/**
+ * Best-effort cleanup of a file's external resources (storage objects and
+ * search indexes). Does NOT touch the database — call this after the DB
+ * records have already been deleted.
+ *
+ * `locations` must be fetched BEFORE the DB records are deleted (cascade
+ * from fileBlobs removes blobLocations rows).
+ */
+export async function cleanupFileExternalResources(params: {
+  db: Database;
+  workspaceId: string;
+  fileId: string;
+  blobId: string;
+  storagePath: string;
+  locations: BlobLocationInfo[];
+  deletedByUserId?: string;
+}) {
+  const { locations } = params;
+
+  if (locations.length === 0 && params.storagePath) {
+    try {
+      const primary = await getPrimaryStore(params.workspaceId);
+      await primary.storage.delete(params.storagePath);
+    } catch {
+      // best-effort
+    }
+  }
+
+  for (const location of locations) {
+    if (location.writeMode === "read_only") {
+      await params.db
+        .insert(ingestTombstones)
+        .values({
+          workspaceId: params.workspaceId,
+          storeId: location.storeId,
+          externalPath: location.storagePath,
+          deletedBlobId: params.blobId,
+          deletedByUserId: params.deletedByUserId ?? null,
+        })
+        .onConflictDoNothing();
+      continue;
+    }
+
+    try {
+      const { storage } = await getStoreById(location.storeId);
+      await storage.delete(location.storagePath);
+    } catch {
+      // best-effort
+    }
+  }
+
+  await deindexFile({
+    db: params.db,
+    workspaceId: params.workspaceId,
+    fileId: params.fileId,
+  });
+}
+
 export async function deleteFileEverywhere(params: {
   db: Database;
   workspaceId: string;

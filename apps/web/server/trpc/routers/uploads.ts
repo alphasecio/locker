@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull, inArray } from "drizzle-orm";
 import { createRouter, workspaceProcedure } from "../init";
 import { fileBlobs, files, folders, workspaces } from "@locker/database";
 import {
@@ -9,6 +9,7 @@ import {
 } from "../../../server/storage";
 import { invalidateWorkspaceVfsSnapshot } from "../../vfs/locker-vfs";
 import {
+  checkConflictsSchema,
   initiateUploadSchema,
   completeUploadSchema,
   abortUploadSchema,
@@ -18,8 +19,9 @@ import {
 import {
   createPendingFileUpload,
   markFileUploadReady,
+  finalizeReplace,
 } from "../../stores/file-records";
-import { runFileReadyHooks } from "../../stores/lifecycle";
+import { runFileReadyHooks, cleanupFileExternalResources } from "../../stores/lifecycle";
 
 export const uploadsRouter = createRouter({
   getProvider: workspaceProcedure.query(async ({ ctx }) => {
@@ -32,13 +34,97 @@ export const uploadsRouter = createRouter({
     };
   }),
 
+  checkConflicts: workspaceProcedure
+    .input(checkConflictsSchema)
+    .query(async ({ ctx, input }) => {
+      const { db, workspaceId } = ctx;
+      const folderId = input.folderId ?? null;
+
+      const existing = await db
+        .select({ id: files.id, name: files.name, size: files.size })
+        .from(files)
+        .where(
+          and(
+            eq(files.workspaceId, workspaceId),
+            eq(files.status, "ready"),
+            folderId ? eq(files.folderId, folderId) : isNull(files.folderId),
+            inArray(files.name, input.fileNames),
+          ),
+        );
+
+      return existing;
+    }),
+
   initiate: workspaceProcedure
     .input(initiateUploadSchema)
     .mutation(async ({ ctx, input }) => {
       const { db, workspaceId, userId } = ctx;
+      const folderId = input.folderId ?? null;
 
-      // Check storage quota (skipped for BYOB and self-hosted/local)
-      if (await shouldEnforceQuota(workspaceId)) {
+      // Validate folder ownership
+      if (folderId) {
+        const [folder] = await db
+          .select({ id: folders.id })
+          .from(folders)
+          .where(
+            and(
+              eq(folders.id, folderId),
+              eq(folders.workspaceId, workspaceId),
+            ),
+          );
+        if (!folder) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Folder not found",
+          });
+        }
+      }
+
+      // Find existing file if replacing (needed for quota calc)
+      let replaceFileId: string | undefined;
+      if (input.conflictResolution === "replace") {
+        const [existing] = await db
+          .select({ id: files.id, size: files.size })
+          .from(files)
+          .where(
+            and(
+              eq(files.workspaceId, workspaceId),
+              eq(files.status, "ready"),
+              eq(files.name, input.fileName),
+              folderId ? eq(files.folderId, folderId) : isNull(files.folderId),
+            ),
+          )
+          .limit(1);
+
+        if (existing) {
+          replaceFileId = existing.id;
+
+          // Check quota using net delta (new size minus freed space)
+          if (await shouldEnforceQuota(workspaceId)) {
+            const [ws] = await db
+              .select({
+                storageUsed: workspaces.storageUsed,
+                storageLimit: workspaces.storageLimit,
+              })
+              .from(workspaces)
+              .where(eq(workspaces.id, workspaceId));
+
+            const netIncrease = input.fileSize - Number(existing.size);
+            if (
+              !ws ||
+              (ws.storageUsed ?? 0) + netIncrease > (ws.storageLimit ?? 0)
+            ) {
+              throw new TRPCError({
+                code: "PAYLOAD_TOO_LARGE",
+                message: "Storage quota exceeded",
+              });
+            }
+          }
+        }
+      }
+
+      // Check storage quota for non-replace uploads
+      if (!replaceFileId && await shouldEnforceQuota(workspaceId)) {
         const [ws] = await db
           .select({
             storageUsed: workspaces.storageUsed,
@@ -58,47 +144,34 @@ export const uploadsRouter = createRouter({
         }
       }
 
-      // Validate folder ownership
-      if (input.folderId) {
-        const [folder] = await db
-          .select({ id: folders.id })
-          .from(folders)
-          .where(
-            and(
-              eq(folders.id, input.folderId),
-              eq(folders.workspaceId, workspaceId),
-            ),
-          );
-        if (!folder) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Folder not found",
-          });
-        }
-      }
-
+      // Don't delete the old file here — defer to `complete` so the original
+      // survives if the upload fails. Let dedup assign a temporary unique name.
+      // Store replaceFileId on the file record so the server can look it up
+      // in complete/stream without trusting a client-supplied value.
       const pending = await createPendingFileUpload({
         db,
         workspaceId,
         userId,
-        folderId: input.folderId ?? null,
+        folderId,
         fileName: input.fileName,
         mimeType: input.contentType,
         size: input.fileSize,
         status: "uploading",
+        replacesFileId: replaceFileId ?? null,
       });
+
+      // Base response fields shared by all strategies
+      const base = {
+        fileId: pending.fileId,
+        storagePath: pending.storagePath,
+      };
 
       // Determine upload strategy
       if (!pending.storage.supportsPresignedUpload) {
-        return {
-          fileId: pending.fileId,
-          storagePath: pending.storagePath,
-          strategy: "server-buffered" as const,
-        };
+        return { ...base, strategy: "server-buffered" as const };
       }
 
       if (input.fileSize < MULTIPART_THRESHOLD) {
-        // Single presigned PUT
         const { url } = await pending.storage.createPresignedUpload!({
           path: pending.storagePath,
           contentType: input.contentType,
@@ -106,8 +179,7 @@ export const uploadsRouter = createRouter({
         });
 
         return {
-          fileId: pending.fileId,
-          storagePath: pending.storagePath,
+          ...base,
           strategy: "presigned-put" as const,
           presignedUrl: url,
         };
@@ -127,8 +199,7 @@ export const uploadsRouter = createRouter({
       });
 
       return {
-        fileId: pending.fileId,
-        storagePath: pending.storagePath,
+        ...base,
         strategy: "multipart" as const,
         uploadId,
         partSize: MULTIPART_PART_SIZE,
@@ -166,7 +237,33 @@ export const uploadsRouter = createRouter({
         });
       }
 
-      await markFileUploadReady({ db, fileId: input.fileId });
+      // For replace: atomically delete old file records + rename + mark ready
+      // in a single transaction to prevent stranded files on partial failure.
+      if (file.replacesFileId) {
+        const oldFile = await finalizeReplace({
+          db,
+          workspaceId,
+          newFileId: input.fileId,
+          replacedFileId: file.replacesFileId,
+        });
+
+        // External cleanup (storage + indexes) after DB commit — best-effort.
+        // Locations were read before the transaction (cascade deletes them).
+        if (oldFile) {
+          void cleanupFileExternalResources({
+            db,
+            workspaceId,
+            fileId: oldFile.id,
+            blobId: oldFile.blobId,
+            storagePath: oldFile.storagePath,
+            locations: oldFile.locations,
+            deletedByUserId: ctx.userId,
+          }).catch(() => {});
+        }
+      } else {
+        await markFileUploadReady({ db, fileId: input.fileId });
+      }
+
       const [updated] = await db
         .select()
         .from(files)

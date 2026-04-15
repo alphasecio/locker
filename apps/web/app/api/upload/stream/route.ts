@@ -9,8 +9,8 @@ import {
 } from "../../../../server/storage";
 import { eq, and, sql } from "drizzle-orm";
 import { invalidateWorkspaceVfsSnapshot } from "../../../../server/vfs/locker-vfs";
-import { markFileUploadReady } from "../../../../server/stores/file-records";
-import { runFileReadyHooks } from "../../../../server/stores/lifecycle";
+import { markFileUploadReady, finalizeReplace } from "../../../../server/stores/file-records";
+import { runFileReadyHooks, cleanupFileExternalResources } from "../../../../server/stores/lifecycle";
 
 export const runtime = "nodejs";
 
@@ -98,9 +98,21 @@ export async function PUT(req: NextRequest) {
 
   // Enforce quota based on where bytes actually land (the file's config),
   // not the workspace's current config which may have changed since initiate.
+  // For replace uploads, subtract the existing file's size from the net increase.
   if (await shouldEnforceQuotaForFile(fileRecord.id)) {
+    let freedBytes = 0;
+    if (fileRecord.replacesFileId) {
+      const [replacedFile] = await db
+        .select({ size: files.size })
+        .from(files)
+        .where(eq(files.id, fileRecord.replacesFileId))
+        .limit(1);
+      freedBytes = Number(replacedFile?.size ?? 0);
+    }
+
+    const netIncrease = contentLength - freedBytes;
     if (
-      (membership.storageUsed ?? 0) + contentLength >
+      (membership.storageUsed ?? 0) + netIncrease >
       (membership.storageLimit ?? 0)
     ) {
       return NextResponse.json(
@@ -120,8 +132,33 @@ export async function PUT(req: NextRequest) {
       contentType,
     });
 
-    // Mark file as ready
-    await markFileUploadReady({ db, fileId });
+    // For replace: atomically delete old file records + rename + mark ready
+    // in a single transaction to prevent stranded files on partial failure.
+    if (fileRecord.replacesFileId) {
+      const oldFile = await finalizeReplace({
+        db,
+        workspaceId: membership.workspaceId,
+        newFileId: fileId,
+        replacedFileId: fileRecord.replacesFileId,
+      });
+
+      // External cleanup (storage + indexes) after DB commit — best-effort.
+      // Locations were read before the transaction (cascade deletes them).
+      if (oldFile) {
+        void cleanupFileExternalResources({
+          db,
+          workspaceId: membership.workspaceId,
+          fileId: oldFile.id,
+          blobId: oldFile.blobId,
+          storagePath: oldFile.storagePath,
+          locations: oldFile.locations,
+          deletedByUserId: userId,
+        }).catch(() => {});
+      }
+    } else {
+      // Mark file as ready
+      await markFileUploadReady({ db, fileId });
+    }
 
     // Update storage usage
     await db
