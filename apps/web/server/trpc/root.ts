@@ -13,10 +13,13 @@ import { pluginsRouter } from "./routers/plugins";
 import { transcriptionsRouter } from "./routers/transcriptions";
 import { vfsShellRouter } from "./routers/vfs-shell";
 import { storageConfigRouter } from "./routers/storage-config";
+import { storesRouter } from "./routers/stores";
 import { tagsRouter } from "./routers/tags";
 import { knowledgeBasesRouter } from "./routers/knowledge-bases";
 import { usersRouter } from "./routers/users";
 import { notificationsRouter } from "./routers/notifications";
+import { assistantRouter } from "./routers/assistant";
+import { runtimeRouter } from "./routers/runtime";
 
 export const appRouter = createRouter({
   files: filesRouter,
@@ -25,6 +28,7 @@ export const appRouter = createRouter({
   uploadLinks: uploadLinksRouter,
   storage: storageRouter,
   storageConfig: storageConfigRouter,
+  stores: storesRouter,
   workspaces: workspacesRouter,
   members: membersRouter,
   uploads: uploadsRouter,
@@ -37,6 +41,8 @@ export const appRouter = createRouter({
   knowledgeBases: knowledgeBasesRouter,
   users: usersRouter,
   notifications: notificationsRouter,
+  assistant: assistantRouter,
+  runtime: runtimeRouter,
 });
 
 export type AppRouter = typeof appRouter;

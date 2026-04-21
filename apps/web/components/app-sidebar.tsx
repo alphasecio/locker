@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -24,6 +24,8 @@ import {
   User,
   Boxes,
   Bell,
+  HardDrive,
+  Palette,
   type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/assets/logo";
@@ -62,6 +64,9 @@ const SIDEBAR_ICON_MAP: Record<string, LucideIcon> = {
 };
 
 type SidebarArea = "workspace" | "account";
+
+/** Route suffixes (relative to workspace prefix) that auto-collapse the sidebar. */
+const AUTO_COLLAPSE_ROUTES = ["/chat"];
 
 function NavItem({
   href,
@@ -147,10 +152,28 @@ export function AppSidebar({
   const router = useRouter();
   const utils = trpc.useUtils();
   const [collapsed, setCollapsed] = useState(false);
+  const savedCollapsedRef = useRef(false);
+  const isOnAutoCollapseRouteRef = useRef(false);
 
   const slugMatch = pathname.match(/\/w\/([^/]+)/);
   const slug = slugMatch?.[1] ?? "";
   const prefix = `/w/${slug}`;
+
+  const isAutoCollapseRoute = AUTO_COLLAPSE_ROUTES.some((route) =>
+    pathname.startsWith(`${prefix}${route}`),
+  );
+
+  useEffect(() => {
+    if (isAutoCollapseRoute && !isOnAutoCollapseRouteRef.current) {
+      savedCollapsedRef.current = collapsed;
+      isOnAutoCollapseRouteRef.current = true;
+      setCollapsed(true);
+    } else if (!isAutoCollapseRoute && isOnAutoCollapseRouteRef.current) {
+      isOnAutoCollapseRouteRef.current = false;
+      setCollapsed(savedCollapsedRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- capture collapsed at the moment of route change only
+  }, [isAutoCollapseRoute]);
 
   const area: SidebarArea = useMemo(() => {
     if (pathname.startsWith("/settings")) return "account";
@@ -330,6 +353,12 @@ function WorkspaceNav({
   const navItems = [
     { href: prefix, label: "My Files", icon: FolderOpen, key: "files" },
     {
+      href: `${prefix}/chat`,
+      label: "AI Assistant",
+      icon: Bot,
+      key: "chat",
+    },
+    {
       href: `${prefix}/shared-links`,
       label: "Share Links",
       icon: Share2,
@@ -373,10 +402,22 @@ function WorkspaceNav({
       key: "settings",
     },
     {
+      href: `${prefix}/settings/stores`,
+      label: "Stores",
+      icon: HardDrive,
+      key: "stores",
+    },
+    {
       href: `${prefix}/settings/members`,
       label: "Members",
       icon: Users,
       key: "members",
+    },
+    {
+      href: `${prefix}/settings/appearance`,
+      label: "Appearance",
+      icon: Palette,
+      key: "appearance",
     },
     {
       href: `${prefix}/settings/api-keys`,

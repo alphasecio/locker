@@ -108,6 +108,37 @@ export const createWorkspaceSchema = z.object({
   name: z.string().min(1).max(100).trim(),
 });
 
+const baseColorNames = [
+  "neutral", "stone", "zinc", "mauve", "olive", "mist", "taupe",
+] as const;
+const accentColorNames = [
+  "amber", "blue", "cyan", "emerald", "fuchsia", "green", "indigo",
+  "lime", "orange", "pink", "purple", "red", "rose", "sky", "teal",
+  "violet", "yellow",
+] as const;
+const radiusNames = ["none", "small", "medium", "large"] as const;
+const fontNames = [
+  "geist", "inter", "roboto", "open-sans", "lato", "poppins", "raleway",
+  "dm-sans", "figtree", "source-sans", "nunito", "playfair", "lora",
+  "merriweather", "source-serif", "jetbrains-mono", "fira-code",
+] as const;
+const headingFontNames = ["inherit", ...fontNames] as const;
+const menuColorValues = [
+  "default", "inverted", "default-translucent", "inverted-translucent",
+] as const;
+const menuAccentValues = ["subtle", "bold"] as const;
+
+export const workspaceThemeConfigSchema = z.object({
+  baseColor: z.enum(baseColorNames),
+  accentColor: z.enum(accentColorNames),
+  radius: z.enum(radiusNames),
+  chartColor: z.enum(accentColorNames),
+  bodyFont: z.enum(fontNames),
+  headingFont: z.enum(headingFontNames),
+  menuColor: z.enum(menuColorValues),
+  menuAccent: z.enum(menuAccentValues),
+});
+
 export const updateWorkspaceSchema = z.object({
   name: z.string().min(1).max(100).trim().optional(),
   slug: z
@@ -119,6 +150,7 @@ export const updateWorkspaceSchema = z.object({
       "Slug must be lowercase letters, numbers, and hyphens",
     )
     .optional(),
+  themeConfig: workspaceThemeConfigSchema.optional(),
 });
 
 export const inviteMemberSchema = z.object({
@@ -135,11 +167,17 @@ export const updateMemberRoleSchema = z.object({
 
 // ── Upload schemas ─────────────────────────────────────────────────────
 
+export const checkConflictsSchema = z.object({
+  folderId: z.string().uuid().nullable().optional(),
+  fileNames: z.array(z.string().min(1).max(255)).min(1).max(100),
+});
+
 export const initiateUploadSchema = z.object({
   fileName: z.string().min(1).max(255),
   fileSize: z.number().int().min(1).max(MAX_FILE_SIZE),
   contentType: z.string().min(1).max(255),
   folderId: z.string().uuid().nullable().optional(),
+  conflictResolution: z.enum(["keep-both", "replace"]).optional(),
 });
 
 export const completeUploadSchema = z.object({

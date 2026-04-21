@@ -17,7 +17,9 @@ import {
   updateWorkspaceSchema,
   generateSlug,
 } from "@locker/common";
+import { TRPCError } from "@trpc/server";
 import { getBuiltinPluginBySlug } from "../../plugins/catalog";
+import { createDefaultStoreForWorkspace, StorageConfigError } from "../../storage";
 
 export const workspacesRouter = createRouter({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -48,6 +50,7 @@ export const workspacesRouter = createRouter({
           ownerId: workspaces.ownerId,
           storageUsed: workspaces.storageUsed,
           storageLimit: workspaces.storageLimit,
+          themeConfig: workspaces.themeConfig,
           role: workspaceMembers.role,
           createdAt: workspaces.createdAt,
         })
@@ -100,14 +103,23 @@ export const workspacesRouter = createRouter({
         })
         .returning();
 
-      // Add creator as owner
       await ctx.db.insert(workspaceMembers).values({
         workspaceId: workspace!.id,
         userId: ctx.userId,
         role: "owner",
       });
 
-      // Auto-install default plugins
+      try {
+        await createDefaultStoreForWorkspace({
+          workspaceId: workspace!.id,
+        });
+      } catch (err) {
+        if (err instanceof StorageConfigError) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: err.message });
+        }
+        throw err;
+      }
+
       const defaultPlugins = ["fts-search", "document-transcription"];
       for (const slug of defaultPlugins) {
         const manifest = getBuiltinPluginBySlug(slug);
@@ -133,6 +145,7 @@ export const workspacesRouter = createRouter({
     .mutation(async ({ ctx, input }) => {
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (input.name) updates.name = input.name;
+      if (input.themeConfig) updates.themeConfig = input.themeConfig;
 
       if (input.slug) {
         // Ensure unique slug

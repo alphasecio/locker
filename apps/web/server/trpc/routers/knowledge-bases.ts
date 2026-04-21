@@ -19,9 +19,14 @@ import {
 } from "@locker/common";
 import { TRPCError } from "@trpc/server";
 import type { Database } from "@locker/database";
-import { createStorageForWorkspace, createStorageForFile } from "../../storage";
+import {
+  createStorageForWorkspace,
+  createStorageForFile,
+  getFileStoragePath,
+} from "../../storage";
 import { getHandler, buildPluginContext } from "../../plugins/runtime";
 import { ingestFileIntoKB } from "../../knowledge-base/auto-ingest";
+import { runtime } from "../../runtime-context";
 
 async function getKBWithAccess(
   db: Database,
@@ -182,29 +187,28 @@ export const knowledgeBasesRouter = createRouter({
     .input(createKnowledgeBaseSchema)
     .mutation(async ({ ctx, input }) => {
       const tagIds = [...new Set(input.tagIds)];
-
-      // Verify all tags belong to workspace
-      const validTags = await ctx.db
-        .select({ id: tags.id, slug: tags.slug })
-        .from(tags)
-        .where(
-          and(
-            inArray(tags.id, tagIds),
-            eq(tags.workspaceId, ctx.workspaceId),
-          ),
-        );
-
-      if (validTags.length !== tagIds.length) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "One or more tags not found",
-        });
-      }
-
       const kbId = crypto.randomUUID();
       const wikiStoragePath = `${ctx.workspaceId}/.kb/${kbId}/wiki/`;
 
       const [kb] = await ctx.db.transaction(async (tx) => {
+        // Validate tags inside the transaction to prevent TOCTOU races
+        const validTags = await tx
+          .select({ id: tags.id })
+          .from(tags)
+          .where(
+            and(
+              inArray(tags.id, tagIds),
+              eq(tags.workspaceId, ctx.workspaceId),
+            ),
+          );
+
+        if (validTags.length !== tagIds.length) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "One or more tags not found",
+          });
+        }
+
         const [inserted] = await tx
           .insert(knowledgeBases)
           .values({
@@ -258,6 +262,17 @@ export const knowledgeBasesRouter = createRouter({
         // Deduplicate files (a file could have multiple of the selected tags)
         const uniqueFileIds = [...new Set(taggedFiles.map((f) => f.id))];
 
+        // On serverless, skip the fire-and-forget backfill — it would be
+        // killed before completion. The client is told to run Ingest All
+        // on a persistent runtime instead.
+        if (!runtime.longRunningSupported) {
+          return {
+            ...kb,
+            initialBackfillSkipped: true,
+            initialBackfillFileCount: uniqueFileIds.length,
+          };
+        }
+
         // Set status to building while ingestion runs
         await ctx.db
           .update(knowledgeBases)
@@ -308,7 +323,7 @@ export const knowledgeBasesRouter = createRouter({
         }
       }
 
-      return kb;
+      return { ...kb, initialBackfillSkipped: false, initialBackfillFileCount: 0 };
     }),
 
   update: workspaceProcedure
@@ -617,6 +632,13 @@ export const knowledgeBasesRouter = createRouter({
         ctx.workspaceId,
       );
 
+      if (!runtime.longRunningSupported) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Bulk ingestion requires a persistent runtime. This operation is not supported on ${runtime.environment}.`,
+        });
+      }
+
       if (kb.status === "building") {
         throw new TRPCError({
           code: "CONFLICT",
@@ -645,8 +667,6 @@ export const knowledgeBasesRouter = createRouter({
               id: files.id,
               name: files.name,
               mimeType: files.mimeType,
-              storagePath: files.storagePath,
-              storageConfigId: files.storageConfigId,
             })
             .from(fileTags)
             .innerJoin(files, eq(fileTags.fileId, files.id))
@@ -679,6 +699,7 @@ export const knowledgeBasesRouter = createRouter({
         workspaceId: ctx.workspaceId,
         userId: ctx.userId,
         pluginId: kb.id,
+        pluginSlug: "knowledge-base",
         config: {},
       });
 
@@ -694,10 +715,10 @@ export const knowledgeBasesRouter = createRouter({
               let fileContent: string;
 
               if (isTextIndexable(file.mimeType)) {
-                const storage = await createStorageForFile(
-                  file.storageConfigId,
+                const storage = await createStorageForFile(file.id);
+                const { data } = await storage.download(
+                  await getFileStoragePath(file.id),
                 );
-                const { data } = await storage.download(file.storagePath);
                 fileContent = await streamToString(data);
               } else {
                 const [transcription] = await ctx.db
@@ -792,6 +813,7 @@ export const knowledgeBasesRouter = createRouter({
         workspaceId: ctx.workspaceId,
         userId: ctx.userId,
         pluginId: kb.id,
+        pluginSlug: "knowledge-base",
         config: {},
       });
 

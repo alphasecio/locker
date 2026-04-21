@@ -2,6 +2,7 @@ import type { Database } from "@locker/database";
 import type { StorageProvider } from "@locker/storage";
 import type { PluginManifest } from "@locker/common";
 import type { ModelMessage } from "ai";
+import type { PluginStorage } from "./plugin-storage";
 
 /** Scoped context passed to every plugin handler invocation. */
 export interface PluginContext {
@@ -9,6 +10,8 @@ export interface PluginContext {
   userId: string;
   db: Database;
   storage: StorageProvider;
+  /** Scoped storage for this plugin's private files (under .plugins/<slug>/). */
+  pluginStorage: PluginStorage;
   /** Non-secret configuration values from the workspace plugin record. */
   config: Record<string, string | number | boolean | null>;
   /** Decrypted secret values for this plugin installation. */
@@ -92,8 +95,6 @@ export interface PluginHandler {
       fileId: string;
       fileName: string;
       mimeType: string;
-      storagePath: string;
-      storageConfigId: string | null;
     },
   ): Promise<TranscriptionResult>;
 

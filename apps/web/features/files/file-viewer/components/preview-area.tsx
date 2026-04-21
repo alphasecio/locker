@@ -4,9 +4,11 @@ import { ImagePreview } from "./image-preview";
 import { VideoPreview } from "./video-preview";
 import { AudioPreview } from "./audio-preview";
 import { PdfPreview } from "./pdf-preview";
+import { DocxPreview } from "./docx-preview";
 import { MarkdownPreview } from "./markdown-preview";
 import { TextPreview } from "./text-preview";
 import { CsvPreview } from "./csv-preview";
+import { HtmlPreview } from "./html-preview";
 import { UnsupportedPreview } from "./unsupported-preview";
 
 export function PreviewArea({
@@ -41,10 +43,14 @@ export function PreviewArea({
       return <AudioPreview url={previewUrl} file={file} />;
     case "pdf":
       return <PdfPreview url={previewUrl} />;
+    case "docx":
+      return <DocxPreview url={previewUrl} />;
     case "markdown":
       return <MarkdownPreview content={textContent} name={file.name} />;
     case "csv":
       return <CsvPreview content={textContent} name={file.name} />;
+    case "html":
+      return <HtmlPreview content={textContent} name={file.name} />;
     case "text":
       return <TextPreview content={textContent} name={file.name} />;
     case "unsupported":

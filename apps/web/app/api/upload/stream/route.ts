@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "../../../../server/auth";
 import { headers } from "next/headers";
 import { getDb } from "@locker/database/client";
-import { files, workspaces, workspaceMembers } from "@locker/database";
+import { fileBlobs, files, workspaces, workspaceMembers } from "@locker/database";
 import {
   createStorageForFile,
-  shouldEnforceQuotaForConfig,
+  shouldEnforceQuotaForFile,
 } from "../../../../server/storage";
 import { eq, and, sql } from "drizzle-orm";
 import { invalidateWorkspaceVfsSnapshot } from "../../../../server/vfs/locker-vfs";
+import { markFileUploadReady, finalizeReplace } from "../../../../server/stores/file-records";
+import { runFileReadyHooks, cleanupFileExternalResources } from "../../../../server/stores/lifecycle";
 
 export const runtime = "nodejs";
 
@@ -96,14 +98,21 @@ export async function PUT(req: NextRequest) {
 
   // Enforce quota based on where bytes actually land (the file's config),
   // not the workspace's current config which may have changed since initiate.
-  if (
-    await shouldEnforceQuotaForConfig(
-      membership.workspaceId,
-      fileRecord.storageConfigId,
-    )
-  ) {
+  // For replace uploads, subtract the existing file's size from the net increase.
+  if (await shouldEnforceQuotaForFile(fileRecord.id)) {
+    let freedBytes = 0;
+    if (fileRecord.replacesFileId) {
+      const [replacedFile] = await db
+        .select({ size: files.size })
+        .from(files)
+        .where(eq(files.id, fileRecord.replacesFileId))
+        .limit(1);
+      freedBytes = Number(replacedFile?.size ?? 0);
+    }
+
+    const netIncrease = contentLength - freedBytes;
     if (
-      (membership.storageUsed ?? 0) + contentLength >
+      (membership.storageUsed ?? 0) + netIncrease >
       (membership.storageLimit ?? 0)
     ) {
       return NextResponse.json(
@@ -114,8 +123,7 @@ export async function PUT(req: NextRequest) {
   }
 
   // Stream the request body to storage
-  // Use the config that was recorded when the upload was initiated
-  const storage = await createStorageForFile(fileRecord.storageConfigId);
+  const storage = await createStorageForFile(fileRecord.id);
 
   try {
     await storage.upload({
@@ -124,11 +132,33 @@ export async function PUT(req: NextRequest) {
       contentType,
     });
 
-    // Mark file as ready
-    await db
-      .update(files)
-      .set({ status: "ready", updatedAt: new Date() })
-      .where(eq(files.id, fileId));
+    // For replace: atomically delete old file records + rename + mark ready
+    // in a single transaction to prevent stranded files on partial failure.
+    if (fileRecord.replacesFileId) {
+      const oldFile = await finalizeReplace({
+        db,
+        workspaceId: membership.workspaceId,
+        newFileId: fileId,
+        replacedFileId: fileRecord.replacesFileId,
+      });
+
+      // External cleanup (storage + indexes) after DB commit — best-effort.
+      // Locations were read before the transaction (cascade deletes them).
+      if (oldFile) {
+        void cleanupFileExternalResources({
+          db,
+          workspaceId: membership.workspaceId,
+          fileId: oldFile.id,
+          blobId: oldFile.blobId,
+          storagePath: oldFile.storagePath,
+          locations: oldFile.locations,
+          deletedByUserId: userId,
+        }).catch(() => {});
+      }
+    } else {
+      // Mark file as ready
+      await markFileUploadReady({ db, fileId });
+    }
 
     // Update storage usage
     await db
@@ -137,6 +167,13 @@ export async function PUT(req: NextRequest) {
         storageUsed: sql`${workspaces.storageUsed} + ${contentLength}`,
       })
       .where(eq(workspaces.id, membership.workspaceId));
+
+    void runFileReadyHooks({
+      db,
+      workspaceId: membership.workspaceId,
+      userId,
+      fileId,
+    }).catch(() => {});
 
     invalidateWorkspaceVfsSnapshot(membership.workspaceId);
     return NextResponse.json({ success: true, fileId });
@@ -147,7 +184,10 @@ export async function PUT(req: NextRequest) {
     } catch {
       // best effort
     }
-    await db.delete(files).where(eq(files.id, fileId));
+    await db.transaction(async (tx) => {
+      await tx.delete(files).where(eq(files.id, fileId));
+      await tx.delete(fileBlobs).where(eq(fileBlobs.id, fileRecord.blobId));
+    });
     invalidateWorkspaceVfsSnapshot(membership.workspaceId);
 
     return NextResponse.json(

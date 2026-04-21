@@ -53,7 +53,7 @@ export function Product() {
         <div className="col-span-full mt-10 grid grid-cols-2 gap-4 md:grid-cols-4">
           {[
             { value: "100%", label: "Open source" },
-            { value: "4", label: "Storage providers" },
+            { value: "4", label: "Storage backends" },
             { value: "Type-safe", label: "End-to-end with tRPC" },
             { value: "0", label: "Vendor lock-in" },
           ].map((stat, i) => (

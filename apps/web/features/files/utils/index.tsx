@@ -21,8 +21,6 @@ export const CODE_EXTENSIONS = new Set([
   "h",
   "hpp",
   "cs",
-  "html",
-  "htm",
   "css",
   "scss",
   "sass",
@@ -58,9 +56,16 @@ export function getViewerType(mimeType: string, name: string): ViewerType {
   if (mimeType.startsWith("audio/")) return "audio";
   if (mimeType === "application/pdf") return "pdf";
   const ext = getFileExtension(name);
+  if (
+    ext === "docx" ||
+    mimeType ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  )
+    return "docx";
   if (ext === "md" || ext === "mdx" || mimeType === "text/markdown")
     return "markdown";
   if (ext === "csv" || mimeType === "text/csv") return "csv";
+  if (ext === "html" || ext === "htm" || mimeType === "text/html") return "html";
   if (mimeType.startsWith("text/") || isTextIndexable(mimeType)) return "text";
   if (CODE_EXTENSIONS.has(ext)) return "text";
   return "unsupported";
